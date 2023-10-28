@@ -34,4 +34,4 @@ runs:
         with:
           packages_dir: dist/*/
           user: __token__
-          password: inputs.password
+          password: ${{ inputs.password }}"
