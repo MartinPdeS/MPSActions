@@ -16,7 +16,7 @@ runs:
       - uses: MartinPdeS/MPSActions/install_package_on_manylinux@master
         with:
           python-version: ${{ inputs.python-version }}
-          package_name: MPSPlots
+          package-name: MPSPlots
 
       - name: "Chekcout requirements and files for testting"
         uses: actions/checkout@v4
