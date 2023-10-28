@@ -9,7 +9,9 @@ inputs:
     python-version:
         description: 'Python version for installation'
         required: true
-
+    package-name:
+        description: 'Name of the package to install'
+        required: true
 
 runs:
     using: "composite"
@@ -17,7 +19,7 @@ runs:
       - uses: MartinPdeS/MPSActions/install_package_on_manylinux@master
         with:
           python-version: ${{ inputs.python-version }}
-          package-name: MPSPlots
+          package-name: ${{ inputs.package-name }}
 
       - name: "Chekcout requirements and files for testting"
         uses: actions/checkout@v4
