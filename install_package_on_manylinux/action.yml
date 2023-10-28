@@ -45,4 +45,6 @@ runs:
             echo =======================
             ls ./dist
             echo =======================
+            ls ./dist
+            echo =======================
             python -m pip install --no-index --find-links './dist/manylinux_wheel_python${{ env.cp_python_version }}/' ${{ inputs.package_name }}
