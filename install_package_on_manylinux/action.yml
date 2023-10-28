@@ -33,6 +33,11 @@ runs:
       with:
         path: ./dist
 
+    - name: "Chekcout requirements and files for testting"
+      uses: Bhacaz/checkout-files@v2
+      with:
+        files: requirements
+
     - name: "Install package"
       shell: bash
       run: |
