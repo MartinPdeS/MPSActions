@@ -21,7 +21,7 @@ runs:
 
       - uses: MartinPdeS/MPSActions/interpret_python_version@master
         with:
-            python_version: ${{ matrix.python_version }}
+            python_version: ${{ inputs.python-version }}
 
       - uses: actions/setup-python@v4
         with:
