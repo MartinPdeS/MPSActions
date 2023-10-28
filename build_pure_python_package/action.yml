@@ -3,13 +3,12 @@ name: Ubuntu-build-pure-package
 permissions:
     contents: write
 
-on:
-    workflow_call:
-        inputs:
-            python-version:
-                type: string
-                required: false
-                default: '3.10'
+
+inputs:
+    python-version:
+        type: string
+        required: false
+        default: '3.10'
 
 
 runs:

@@ -4,11 +4,22 @@ description: "Build and publish the documentation for github page"
 inputs:
     GITHUB_TOKEN:
         required: true
+    python-version:
+        description: 'Python version for installation'
+        required: true
+    package_name:
+        description: 'Name of the package to install'
+        required: true
 
 
 runs:
     using: "composite"
     steps:
+      - uses: MartinPdeS/MPSActions/install_package_on_manylinux@master
+        with:
+            python-version: ${{ inputs.python-version }}
+            package_name: ${{ inputs.package_name }}
+
       - uses: actions/checkout@v4
         with:
             sparse-checkout: |
