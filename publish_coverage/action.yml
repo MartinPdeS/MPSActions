@@ -7,6 +7,7 @@ inputs:
     auth:
         required: true
     python-version:
+        description: 'Python version for installation'
         required: true
 
 
