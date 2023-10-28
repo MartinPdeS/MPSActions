@@ -2,27 +2,27 @@ name: "Publish documentation"
 description: "Build and publish the documentation for github page"
 
 inputs:
-  GITHUB_TOKEN:
-    required: true
+    GITHUB_TOKEN:
+        required: true
 
 
 runs:
-  using: "composite"
-  steps:
-    - uses: Bhacaz/checkout-files@v2
-      with:
-        files: docs requirements
+    using: "composite"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            sparse-checkout: docs requirements
 
-    - name: "Build: documentation"
-      shell: bash
-      run: |
-        python -m pip install -r requirements/requirements-development.txt
-        make -C docs html
+      - name: "Build: documentation"
+        shell: bash
+        run: |
+            python -m pip install -r requirements/requirements-development.txt
+            make -C docs html
 
-    - name: "Upload: GitHub Pages"
-      uses: crazy-max/ghaction-github-pages@v3
-      with:
-        target_branch: gh-pages
-        build_dir: docs/build/html
-      env:
-        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+      - name: "Upload: GitHub Pages"
+        uses: crazy-max/ghaction-github-pages@v3
+        with:
+            target_branch: gh-pages
+            build_dir: docs/build/html
+        env:
+            GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
