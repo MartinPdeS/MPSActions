@@ -16,7 +16,7 @@ runs:
     - name: "Build: documentation"
       shell: bash
       run: |
-        python -m pip install -r requirements/requirements-development
+        python -m pip install -r requirements/requirements-development.txt
         make -C docs html
 
     - name: "Upload: GitHub Pages"
