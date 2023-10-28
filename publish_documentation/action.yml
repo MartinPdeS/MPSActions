@@ -7,7 +7,7 @@ inputs:
     python-version:
         description: 'Python version for installation'
         required: true
-    package_name:
+    package-name:
         description: 'Name of the package to install'
         required: true
 
@@ -18,7 +18,7 @@ runs:
       - uses: MartinPdeS/MPSActions/install_package_on_manylinux@master
         with:
             python-version: ${{ inputs.python-version }}
-            package_name: ${{ inputs.package_name }}
+            package-name: ${{ inputs.package-name }}
 
       - uses: actions/checkout@v4
         with:
