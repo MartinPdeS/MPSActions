@@ -28,15 +28,15 @@ runs:
             sudo apt-get update
             sudo apt-get install libgl1-mesa-glx xvfb
 
-      - name: "Download: wheel"
-        uses: actions/download-artifact@v3
-        with:
-            path: ./dist
-
       - name: "Chekcout requirements and files for testting"
         uses: actions/checkout@v4
         with:
             sparse-checkout: requirements
+
+      - name: "Download: wheel"
+        uses: actions/download-artifact@v3
+        with:
+            path: ./dist
 
       - name: "Install package"
         shell: bash
