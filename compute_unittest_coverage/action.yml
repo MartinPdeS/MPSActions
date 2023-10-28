@@ -2,40 +2,42 @@ name: "Compute test coverage"
 description: "Interprets python version written with a dot to cp version"
 
 inputs:
-  gistID:
-    required: true
-  auth:
-    required: true
+    gistID:
+        required: true
+    auth:
+        required: true
 
 
 runs:
-  using: "composite"
-  steps:
-    - name: "Chekcout requirements and files for testting"
-      uses: Bhacaz/checkout-files@v2
-      with:
-        files: tests requirements
+    using: "composite"
+    steps:
+      - name: "Chekcout requirements and files for testting"
+        uses: actions/checkout@v4
+        with:
+            sparse-checkout: |
+              tests
+              requirements
 
-    - name: "Computing total coverage"
-      shell: bash
-      run: |
-        python -m pip install coverage pytest
-        cd tests
-        coverage run -p -m pytest -s .
-        coverage combine
-        coverage report -m --skip-covered
-        coverage json -o ./CoverageReport.json
-        export TOTAL=$(python -c "import json; print(json.load(open('CoverageReport.json'))['totals']['percent_covered_display'])")
-        echo "total=$TOTAL" >> $GITHUB_ENV
+      - name: "Computing total coverage"
+        shell: bash
+        run: |
+            python -m pip install coverage pytest
+            cd tests
+            coverage run -p -m pytest -s .
+            coverage combine
+            coverage report -m --skip-covered
+            coverage json -o ./CoverageReport.json
+            export TOTAL=$(python -c "import json; print(json.load(open('CoverageReport.json'))['totals']['percent_covered_display'])")
+            echo "total=$TOTAL" >> $GITHUB_ENV
 
-    - name: "Upload: Coverage badge"
-      uses: schneegans/dynamic-badges-action@v1.7.0
-      with:
-        auth: ${{ inputs.auth }}
-        gistID: ${{ inputs.gistID }}
-        filename: coverage_badge.json
-        label: Coverage
-        message: ${{ env.total }}%
-        minColorRange: 50
-        maxColorRange: 90
-        valColorRange: ${{ env.total }}
+      - name: "Upload: Coverage badge"
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+            auth: ${{ inputs.auth }}
+            gistID: ${{ inputs.gistID }}
+            filename: coverage_badge.json
+            label: Coverage
+            message: ${{ env.total }}%
+            minColorRange: 50
+            maxColorRange: 90
+            valColorRange: ${{ env.total }}
