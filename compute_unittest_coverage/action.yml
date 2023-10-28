@@ -28,14 +28,14 @@ runs:
         export TOTAL=$(python -c "import json; print(json.load(open('CoverageReport.json'))['totals']['percent_covered_display'])")
         echo "total=$TOTAL" >> $GITHUB_ENV
 
-      - name: "Upload: Coverage badge"
-        uses: schneegans/dynamic-badges-action@v1.4.0
-        with:
-          auth: inputs.auth
-          gistID: inputs.gistID
-          filename: coverage_badge.json
-          label: Coverage
-          message: ${{ env.total }}%
-          minColorRange: 50
-          maxColorRange: 90
-          valColorRange: ${{ env.total }}
+    - name: "Upload: Coverage badge"
+      uses: schneegans/dynamic-badges-action@v1.4.0
+      with:
+        auth: inputs.auth
+        gistID: inputs.gistID
+        filename: coverage_badge.json
+        label: Coverage
+        message: ${{ env.total }}%
+        minColorRange: 50
+        maxColorRange: 90
+        valColorRange: ${{ env.total }}
