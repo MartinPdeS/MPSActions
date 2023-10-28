@@ -7,7 +7,7 @@ runs:
     - name: "Computing total coverage"
       shell: bash
       run: |
-        python -m pip install coverage pytests
+        python -m pip install coverage pytest
         cd tests
         coverage run -p -m pytest -s .
         coverage combine
