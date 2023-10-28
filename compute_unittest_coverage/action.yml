@@ -11,6 +11,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: "Chekcout requirements and files for testting"
+      uses: Bhacaz/checkout-files@v2
+      with:
+        files: tests requirements
+
     - name: "Computing total coverage"
       shell: bash
       run: |
