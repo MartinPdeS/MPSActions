@@ -27,7 +27,7 @@ runs:
         with:
             python-version: ${{ inputs.python-version }}
 
-      - name: "Run: Tests"
+      - name: "Running unittests and building wheel"
         shell: bash
         run: |
             python -m pip install --upgrade pip
