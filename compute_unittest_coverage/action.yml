@@ -31,8 +31,8 @@ runs:
     - name: "Upload: Coverage badge"
       uses: schneegans/dynamic-badges-action@v1.4.0
       with:
-        auth: inputs.auth
-        gistID: inputs.gistID
+        auth: ${{ inputs.auth }}
+        gistID: ${{ inputs.gistID }}
         filename: coverage_badge.json
         label: Coverage
         message: ${{ env.total }}%
