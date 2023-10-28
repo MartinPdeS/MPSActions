@@ -2,7 +2,7 @@ name: "Install package on ManyLinux"
 description: "Installs prebuild ubuntu-latest wheel to current job"
 
 inputs:
-    python_version:
+    python-version:
         description: 'Python version for installation'
         required: true
     package_name:
@@ -14,7 +14,7 @@ runs:
     steps:
       - uses: MartinPdeS/MPSActions/interpret_python_version@master
         with:
-            python_version: ${{ inputs.python_version }}
+            python-version: ${{ inputs.python-version }}
 
       - name: "Set-up: Python ${{ env.cp_python_version }}"
         uses: actions/setup-python@v4

@@ -2,7 +2,7 @@ name: "Interpret Python Version"
 description: "Interprets python version written with a dot to cp version"
 
 inputs:
-    python_version:
+    python-version:
         description: 'Python version to be translated'
         required: true
 
@@ -12,9 +12,9 @@ runs:
       - name: "translate python version to cp"
         shell: bash
         run: |
-            echo "Python version to be translated: ${{inputs.python_version}} saved in env.dotted_python_version"
+            echo "Python version to be translated: ${{inputs.python-version}} saved in env.dotted_python_version"
 
-            TEMP=${{ inputs.python_version }}
+            TEMP=${{ inputs.python-version }}
             PYTHON_CP_VERSION="cp${TEMP//./}"
 
             echo "PYTHON_CP_VERSION=$PYTHON_CP_VERSION" >> $GITHUB_ENV

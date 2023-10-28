@@ -6,11 +6,18 @@ inputs:
         required: true
     auth:
         required: true
+    python-version:
+        required: true
 
 
 runs:
     using: "composite"
     steps:
+      - uses: MartinPdeS/MPSActions/install_package_on_manylinux@master
+        with:
+          python-version: ${{ inputs.python-version }}
+          package_name: MPSPlots
+
       - name: "Chekcout requirements and files for testting"
         uses: actions/checkout@v4
         with:
