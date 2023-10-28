@@ -34,9 +34,9 @@ runs:
         path: ./dist
 
     - name: "Chekcout requirements and files for testting"
-      uses: Bhacaz/checkout-files@v2
+      uses: actions/checkout@v4
       with:
-        files: requirements
+        sparse-checkout: requirements
 
     - name: "Install package"
       shell: bash
