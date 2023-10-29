@@ -6,48 +6,47 @@ inputs:
         description: 'Python version for installation'
         required: true
 
-jobs:
-    job_create_wheel:
-        name: "Python ${{ matrix.python-version }}"
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                python-version: ${{ fromJson(inputs.python-version-list) }}
-        steps:
-          - name: "Checkout repository"
-            uses: actions/checkout@v3
-            with:
-                submodules: 'true'
+runs:
+    using: "composite"
+    strategy:
+        fail-fast: false
+        matrix:
+            python-version: ${{ fromJson(inputs.python-version-list) }}
 
-          - uses: MartinPdeS/MPSActions/interpret_python_version@master
-            with:
-              python-version: ${{ matrix.python-version }}
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v3
+        with:
+            submodules: 'true'
 
-          - name: "Build: Wheels"
-            uses: pypa/cibuildwheel@v2.16.2
-            with:
-                output-dir: dist
-            env:
-                CC: /usr/bin/gcc
-                CXX: /usr/bin/g++
-                CIBW_BUILD: "${{ env.PYTHON_CP_VERSION }}-manylinux_x86_64"
-                CIBW_TEST_REQUIRES: ".[development]"
-                CIBW_BUILD_VERBOSITY: 1
-                CIBW_ARCHS: "x86_64"
-                CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
-                CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
-                CIBW_BEFORE_BUILD: |
-                    mkdir build
-                    cd build
-                    cmake -G"Unix Makefiles" -DPYBIND11_PYTHON_VERSION=${{ matrix.python-version }}  ./..
-                    make install
-                    cd ..
-                    ##### WTF: looks like if y put the requirement-dev before cmake install auditwheel will find too-recent symbols!!! (took me 8h to debug!)
+      - uses: MartinPdeS/MPSActions/interpret_python_version@master
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Build: Wheels"
+        uses: pypa/cibuildwheel@v2.16.2
+        with:
+            output-dir: dist
+        env:
+            CC: /usr/bin/gcc
+            CXX: /usr/bin/g++
+            CIBW_BUILD: "${{ env.PYTHON_CP_VERSION }}-manylinux_x86_64"
+            CIBW_TEST_REQUIRES: ".[development]"
+            CIBW_BUILD_VERBOSITY: 1
+            CIBW_ARCHS: "x86_64"
+            CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+            CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
+            CIBW_BEFORE_BUILD: |
+                mkdir build
+                cd build
+                cmake -G"Unix Makefiles" -DPYBIND11_PYTHON_VERSION=${{ matrix.python-version }}  ./..
+                make install
+                cd ..
+                ##### WTF: looks like if y put the requirement-dev before cmake install auditwheel will find too-recent symbols!!! (took me 8h to debug!)
 
 
-          - name: "Upload: Wheel"
-            uses: actions/upload-artifact@v3
-            with:
-                name: "manylinux_wheel_python${{ env.PYTHON_CP_VERSION }}"
-                path: ./dist/*
+      - name: "Upload: Wheel"
+        uses: actions/upload-artifact@v3
+        with:
+            name: "manylinux_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            path: ./dist/*
