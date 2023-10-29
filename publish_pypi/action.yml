@@ -1,13 +1,15 @@
 name: "Publish to PyPi"
 description: "Build and publish the package to PyPi"
 
-inputs:
-    python-version:
-        description: 'Python version for installation'
-        required: true
-    password:
-        description: 'Name of the package to install'
-        required: true
+on:
+    workflow_call:
+        inputs:
+            python-version:
+                description: 'Python version for installation'
+                required: true
+            password:
+                description: 'Name of the package to install'
+                required: true
 
 
 jobs:
