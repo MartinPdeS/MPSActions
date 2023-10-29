@@ -2,17 +2,12 @@ name: "ManyLinux build"
 description: "Build and upload package for ManyLinux systems"
 
 inputs:
-    python-version-list:
+    python-version:
         description: 'Python version for installation'
         required: true
 
 runs:
     using: "composite"
-    strategy:
-        fail-fast: false
-        matrix:
-            python-version: ${{ fromJson(inputs.python-version-list) }}
-
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v3
@@ -21,7 +16,7 @@ runs:
 
       - uses: MartinPdeS/MPSActions/interpret_python_version@master
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ inputs.python-version }}
 
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.16.2
@@ -39,7 +34,7 @@ runs:
             CIBW_BEFORE_BUILD: |
                 mkdir build
                 cd build
-                cmake -G"Unix Makefiles" -DPYBIND11_PYTHON_VERSION=${{ matrix.python-version }}  ./..
+                cmake -G"Unix Makefiles" -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
                 make install
                 cd ..
                 ##### WTF: looks like if y put the requirement-dev before cmake install auditwheel will find too-recent symbols!!! (took me 8h to debug!)
