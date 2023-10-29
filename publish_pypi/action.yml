@@ -36,7 +36,9 @@ runs:
 
       - name: "Publish: Wheel"
         uses: pypa/gh-action-pypi-publish@v1.5.1
+        env:
+          MY_SECRET: ${{ inputs.password }}
         with:
           packages_dir: dist/*/
           user: __token__
-          password: ${{ inputs.password }}"
+          password: ${{ env.MY_SECRET }}"
