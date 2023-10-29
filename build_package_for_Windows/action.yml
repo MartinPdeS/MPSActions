@@ -38,7 +38,7 @@ runs:
         env:
             CIBW_BUILD: "${{ env.cp_python_version }}-win_amd64"
             CIBW_TEST_REQUIRES: ".[development]"
-            CIBW_BUILD_VERBOSITY: 1
+            CIBW_BUILD_VERBOSITY: 0
             CIBW_ARCHS: "auto"
             CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
             CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
