@@ -36,4 +36,4 @@ runs:
         with:
           packages_dir: dist/*/
           user: __token__
-          password: $MY_SECRET
+          password: "${{ env.MY_SECRET }}"
