@@ -1,5 +1,5 @@
-name: "ManyLinux build"
-description: "Build and upload package for ManyLinux systems"
+name: "MacOS build"
+description: "Build and upload package for MacOS [> 10.13] systems"
 
 inputs:
     python-version:
@@ -13,35 +13,45 @@ runs:
       - name: "Checkout repository"
         uses: actions/checkout@v3
         with:
-            submodules: 'true'
+            submodules: true
 
       - uses: MartinPdeS/MPSActions/interpret_python_version@master
         with:
           python-version: ${{ inputs.python-version }}
+
+      - name: Setup GNU Fortran
+        uses: fortran-lang/setup-fortran@v1
+        id: setup-fortran
 
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.16.2
         with:
             output-dir: dist
         env:
-            CC: "/usr/bin/gcc"
-            CXX: "/usr/bin/g++"
-            CIBW_BUILD: "${{ env.PYTHON_CP_VERSION }}-manylinux_x86_64"
+            FC: "/usr/local/bin/gfortran"
+            CIBW_BUILD: "${{ env.cp_python_version }}-macosx_x86_64"
+            CIBW_ARCHS: "x86_64"
+            CIBW_PLATFORM: "macos"
             CIBW_TEST_REQUIRES: ".[development]"
             CIBW_BUILD_VERBOSITY: 1
-            CIBW_ARCHS: "x86_64"
-            CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+            MACOSX_DEPLOYMENT_TARGET: "10.13"
+            _PYTHON_HOST_PLATFORM: "macosx-10.13-x86_64"
+            CIBW_ENVIRONMENT_MACOS:
+                PROJ_WHEEL=true
+                PROJ_NETWORK=ON
+                MACOSX_DEPLOYMENT_TARGET=10.13
             CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
             CIBW_BEFORE_BUILD: |
                 mkdir build
                 cd build
-                cmake -G"Unix Makefiles" -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
+                cmake -G"Unix Makefiles" -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
                 make install
                 cd ..
-                ##### Warning: looks like if y put the requirement-dev before cmake install auditwheel will find too-recent symbols!!! (took me 8h to debug!)
+
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
-            name: "manylinux_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            name: "macos_x86_64_wheel_${{ env.cp_python_version }}"
             path: ./dist/*
+
