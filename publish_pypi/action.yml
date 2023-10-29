@@ -29,6 +29,11 @@ runs:
         with:
           path: dist
 
+      - name: "tdst"
+        shell: bash
+        run:
+            echo ${{ inputs.password }}"
+
       - name: "Publish: Wheel"
         uses: pypa/gh-action-pypi-publish@v1.5.1
         with:
