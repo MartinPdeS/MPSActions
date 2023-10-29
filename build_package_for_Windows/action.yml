@@ -1,0 +1,59 @@
+name: "MacOS build"
+description: "Build and upload package for MacOS [> 10.13] systems"
+
+inputs:
+    python-version:
+        description: 'Python version for installation'
+        type: string
+        required: true
+
+runs:
+    using: "composite"
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v3
+        with:
+            submodules: true
+
+      - uses: MartinPdeS/MPSActions/interpret_python_version@master
+        with:
+            python-version: ${{ inputs.python-version }}
+
+      - uses: msys2/setup-msys2@v2
+        with:
+            update: true
+            install: >-
+                mingw-w64-x86_64-toolchain
+                mingw-w64-x86_64-cmake
+                mingw-w64-x86_64-openmp
+                mingw-w64-x86_64-ninja
+
+      - uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: "Build: Wheels"
+        uses: pypa/cibuildwheel@v2.16.2
+        with:
+            output-dir: dist
+        env:
+            CIBW_BUILD: "${{ env.cp_python_version }}-win_amd64"
+            CIBW_TEST_REQUIRES: ".[development]"
+            CIBW_BUILD_VERBOSITY: 1
+            CIBW_ARCHS: "auto"
+            CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
+            CIBW_BEFORE_BUILD: |
+                echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
+                mkdir build
+                cd build
+                cmake -G"Ninja" -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
+                ninja
+                cd ..
+
+      - name: "Upload: Wheel"
+        uses: actions/upload-artifact@v3
+        with:
+            name: "windows_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            path: ./dist/*
+
+
+
