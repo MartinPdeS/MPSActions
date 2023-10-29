@@ -44,7 +44,7 @@ runs:
             CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
                             && mkdir build
                             && cd build
-                            && cmake -G"Ninja" -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ matrix.python_version }}  ./..
+                            && cmake -G"Ninja" -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
                             && ninja
                             && cd ..
                             && python -m pip install .'
