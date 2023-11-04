@@ -32,10 +32,7 @@ runs:
         shell: bash
         run: |
             python -m pip install coverage pytest
-            cd tests
-            coverage run -p -m pytest -s .
-            coverage combine
-            coverage report -m --skip-covered
+            coverage run --source=${{ inputs.package-name }} --module pytest --verbose tests
             cov_score=$(coverage report | awk '$1 == "TOTAL" {print $NF+0}')
             echo "total=$cov_score" >> $GITHUB_ENV
 
