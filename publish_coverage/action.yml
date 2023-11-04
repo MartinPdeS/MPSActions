@@ -41,7 +41,7 @@ runs:
         with:
             auth: ${{ inputs.auth }}
             gistID: ${{ inputs.gistID }}
-            filename: coverage_badge.json
+            filename: ${{ package-name }}coverage_badge.json
             label: Coverage
             message: ${{ env.total }}%
             minColorRange: 50
