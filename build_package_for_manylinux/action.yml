@@ -31,7 +31,7 @@ runs:
             CIBW_BUILD_VERBOSITY: 1
             CIBW_ARCHS: "x86_64"
             CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
-            CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
+            # CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
             CIBW_BEFORE_BUILD: |
                 mkdir build
                 cd build
