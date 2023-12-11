@@ -29,7 +29,7 @@ runs:
             CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
                             && mkdir build
                             && cd build
-                            && cmake -G"Ninja" DCMAKE_Fortran_COMPILER=C:/mingw64/bin/gfortran.exe -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
+                            && cmake -G"Ninja" -DCMAKE_Fortran_COMPILER=C:/mingw64/bin/gfortran.exe -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
                             && ninja
                             && cd ..
                             && python -m pip install .'
