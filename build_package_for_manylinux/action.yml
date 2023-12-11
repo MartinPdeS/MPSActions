@@ -26,7 +26,6 @@ runs:
         env:
             CC: "/usr/bin/gcc"
             CXX: "/usr/bin/g++"
-            CIBW_BUILD: "cp310-manylinux_x86_64"
             CIBW_BEFORE_TEST: ls . && ls {project}/
 
       - name: "Upload: Wheel"
