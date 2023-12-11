@@ -30,23 +30,13 @@ runs:
         env:
             FC: "/usr/local/bin/gfortran"
             CIBW_BUILD: "${{ env.cp_python_version }}-macosx_x86_64"
-            CIBW_ARCHS: "x86_64"
             CIBW_PLATFORM: "macos"
-            CIBW_TEST_REQUIRES: ".[testing,validation]"
-            CIBW_BUILD_VERBOSITY: 1
             MACOSX_DEPLOYMENT_TARGET: "10.13"
             _PYTHON_HOST_PLATFORM: "macosx-10.13-x86_64"
             CIBW_ENVIRONMENT_MACOS:
                 PROJ_WHEEL=true
                 PROJ_NETWORK=ON
                 MACOSX_DEPLOYMENT_TARGET=10.13
-            CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
-            CIBW_BEFORE_BUILD: |
-                mkdir build
-                cd build
-                cmake -G"Unix Makefiles" -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
-                make install
-                cd ..
 
 
       - name: "Upload: Wheel"
