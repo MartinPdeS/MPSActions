@@ -43,7 +43,7 @@ runs:
                             && ninja
                             && cd ..
                             && python -m pip install .'
-/
+
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
