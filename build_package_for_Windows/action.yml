@@ -16,10 +16,6 @@ runs:
         with:
             submodules: true
 
-      - uses: MartinPdeS/MPSActions/interpret_python_version@master
-        with:
-            python-version: ${{ inputs.python-version }}
-
       - uses: msys2/setup-msys2@v2
         with:
             update: true
@@ -39,7 +35,7 @@ runs:
             CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
                             && mkdir build
                             && cd build
-                            && cmake -G"Ninja" -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
+                            && cmake -G"Ninja" DCMAKE_Fortran_COMPILER=C:/mingw64/bin/gfortran.exe -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
                             && ninja
                             && cd ..
                             && python -m pip install .'
@@ -47,7 +43,7 @@ runs:
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
-            name: "windows_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            name: "windows_wheel_python"
             path: ./dist/*
 
 
