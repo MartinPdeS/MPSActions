@@ -15,10 +15,6 @@ runs:
         with:
             submodules: 'true'
 
-      - uses: MartinPdeS/MPSActions/interpret_python_version@master
-        with:
-          python-version: ${{ inputs.python-version }}
-
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.16.2
         with:
@@ -30,5 +26,5 @@ runs:
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
-            name: "manylinux_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            name: "manylinux_wheel_python"
             path: ./dist/*

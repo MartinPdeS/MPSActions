@@ -36,11 +36,6 @@ runs:
         with:
             output-dir: dist
         env:
-            CIBW_BUILD: "${{ env.cp_python_version }}-win_amd64"
-            CIBW_TEST_REQUIRES: ".[testing,validation]"
-            CIBW_BUILD_VERBOSITY: 0
-            CIBW_ARCHS: "auto"
-            CIBW_TEST_COMMAND: 'pytest -s {project}/tests'
             CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
                             && mkdir build
                             && cd build
@@ -48,7 +43,7 @@ runs:
                             && ninja
                             && cd ..
                             && python -m pip install .'
-
+/
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
