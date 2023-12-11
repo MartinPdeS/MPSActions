@@ -26,7 +26,6 @@ runs:
         env:
             CC: "/usr/bin/gcc"
             CXX: "/usr/bin/g++"
-            CIBW_BEFORE_TEST: ls . && ls {project}/
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
