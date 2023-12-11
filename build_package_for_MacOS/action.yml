@@ -15,10 +15,6 @@ runs:
         with:
             submodules: true
 
-      - uses: MartinPdeS/MPSActions/interpret_python_version@master
-        with:
-          python-version: ${{ inputs.python-version }}
-
       - name: Setup GNU Fortran
         uses: fortran-lang/setup-fortran@v1
         id: setup-fortran
@@ -40,6 +36,6 @@ runs:
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
-            name: "macos_x86_64_wheel_${{ env.cp_python_version }}"
+            name: "macos_x86_64_wheel"
             path: ./dist/*
 
