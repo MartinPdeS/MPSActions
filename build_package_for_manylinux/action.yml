@@ -26,7 +26,7 @@ runs:
         env:
             CC: "/usr/bin/gcc"
             CXX: "/usr/bin/g++"
-            CIBW_BUILD: "${{ env.PYTHON_CP_VERSION }}-manylinux_x86_64"
+            # CIBW_BUILD: "${{ env.PYTHON_CP_VERSION }}-manylinux_x86_64"
             CIBW_BEFORE_TEST: ls . && ls {project}/
 
       - name: "Upload: Wheel"
