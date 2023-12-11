@@ -1,12 +1,6 @@
 name: "MacOS build"
 description: "Build and upload package for MacOS [> 10.13] systems"
 
-inputs:
-    python-version:
-        description: 'Python version for installation'
-        type: string
-        required: true
-
 runs:
     using: "composite"
     steps:
