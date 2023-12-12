@@ -13,7 +13,7 @@ runs:
       - uses: msys2/setup-msys2@v2
         with:
             path-type: inherit
-            update: true
+            msystem: MINGW64
             install: >-
                 mingw-w64-x86_64-toolchain
                 mingw-w64-x86_64-cmake
@@ -29,13 +29,6 @@ runs:
             output-dir: dist
         env:
             CIBW_ENVIRONMENT_WINDOWS: FC=gfortran
-            # CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
-            #                 && mkdir build
-            #                 && cd build
-            #                 && cmake -G"Ninja" -DCMAKE_Fortran_COMPILER=C:/mingw64/bin/gfortran.exe -DCMAKE_FIND_DEBUG_MODE=1 -DPYBIND11_PYTHON_VERSION=${{ inputs.python-version }}  ./..
-            #                 && ninja
-            #                 && cd ..
-            #                 && python -m pip install .'
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
