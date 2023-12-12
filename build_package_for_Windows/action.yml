@@ -28,6 +28,7 @@ runs:
             output-dir: dist
         env:
             CMAKE_GENERATOR: Ninja
+            CMAKE_MAKE_PROGRAM: ninja
             # CMAKE_GENERATOR: MinGW Makefiles
 
       - name: "Upload: Wheel"
