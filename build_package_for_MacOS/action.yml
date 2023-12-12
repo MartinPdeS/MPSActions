@@ -20,7 +20,7 @@ runs:
         env:
             FC: "/usr/local/bin/gfortran"
             MACOSX_DEPLOYMENT_TARGET: "10.13"
-            _PYTHON_HOST_PLATFORM: "macosx-10.13-x86_64"
+            # _PYTHON_HOST_PLATFORM: "macosx-10.13-x86_64"
             CIBW_ENVIRONMENT_MACOS:
                 PROJ_WHEEL=true
                 PROJ_NETWORK=ON
