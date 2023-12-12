@@ -26,7 +26,7 @@ runs:
         with:
             output-dir: dist
         env:
-            FC: "C:/mingw64/bin/gfortran"
+            FC: "C:/mingw64/bin/x86_64-w64-mingw32-gfortran.exe"
             # CIBW_BEFORE_BUILD: 'echo "C:/ProgramData/chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/" >> $GITHUB_PATH
             #                 && mkdir build
             #                 && cd build
