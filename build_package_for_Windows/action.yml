@@ -19,6 +19,7 @@ runs:
                 mingw-w64-x86_64-cmake
                 mingw-w64-x86_64-openmp
                 mingw-w64-x86_64-ninja
+                mingw-w64-x86_64-gcc-fortran
 
       - uses: seanmiddleditch/gha-setup-ninja@master
 
