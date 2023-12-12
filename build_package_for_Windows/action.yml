@@ -27,9 +27,9 @@ runs:
         with:
             output-dir: dist
         env:
-            # CMAKE_GENERATOR: Ninja 
-            # CMAKE_MAKE_PROGRAM: ninja
-            CMAKE_GENERATOR: MinGW Makefiles
+            CMAKE_GENERATOR: Ninja
+            CMAKE_MAKE_PROGRAM: ninja
+            # CMAKE_GENERATOR: MinGW Makefiles
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
