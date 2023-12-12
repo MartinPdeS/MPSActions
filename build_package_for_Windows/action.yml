@@ -20,7 +20,7 @@ runs:
                 mingw-w64-x86_64-ninja
                 mingw-w64-x86_64-gcc-fortran
 
-      # - uses: seanmiddleditch/gha-setup-ninja@master
+      - uses: seanmiddleditch/gha-setup-ninja@master
 
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.16.2
@@ -28,6 +28,7 @@ runs:
             output-dir: dist
         env:
             CIBW_ENVIRONMENT_WINDOWS: FC=gfortran
+            CMAKE_GENERATOR: MinGW Makefiles
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
