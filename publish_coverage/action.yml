@@ -21,7 +21,7 @@ runs:
           python-version: ${{ inputs.python-version }}
           package-name: ${{ inputs.package-name }}
 
-      - name: "Chekcout requirements and files for testting"
+      - name: "Chekcout requirements and files for testing"
         uses: actions/checkout@v4
         with:
             sparse-checkout: |
