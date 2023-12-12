@@ -4,7 +4,7 @@ description: "Build and upload package for MacOS [> 10.13] systems"
 runs:
     using: "composite"
     steps:
-      - name: "Checkout repository"
+      - name: "Checkout repository "
         uses: actions/checkout@v3
         with:
             submodules: true
@@ -27,9 +27,9 @@ runs:
         with:
             output-dir: dist
         env:
-            CMAKE_GENERATOR: Ninja
-            CMAKE_MAKE_PROGRAM: ninja
-            # CMAKE_GENERATOR: MinGW Makefiles
+            # CMAKE_GENERATOR: Ninja 
+            # CMAKE_MAKE_PROGRAM: ninja
+            CMAKE_GENERATOR: MinGW Makefiles
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
