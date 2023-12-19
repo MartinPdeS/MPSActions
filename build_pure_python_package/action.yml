@@ -37,6 +37,6 @@ runs:
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
         with:
-            name: "manylinux_wheel_python${{ env.PYTHON_CP_VERSION }}"
+            name: "manylinux_wheel_python"
             path: ./dist/*
 
