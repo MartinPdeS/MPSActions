@@ -30,8 +30,6 @@ runs:
 
       - name: "Chekcout requirements and files for testting"
         uses: actions/checkout@v4
-        # with:
-        #     sparse-checkout: requirements
 
       - name: "Download: wheel"
         uses: actions/download-artifact@v3
@@ -42,5 +40,3 @@ runs:
         shell: bash
         run: |
             python -m pip install --find-links './dist/manylinux_wheel_python/' '${{ inputs.package-name }}[documentation,testing]'
-            # python -m pip install -r requirements/requirements-development.txt
-            # python -m pip install --no-index --find-links './dist/manylinux_wheel_python/' ${{ inputs.package-name }}[development]
