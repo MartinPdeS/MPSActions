@@ -10,7 +10,7 @@ runs:
             submodules: 'true'
 
       - name: "Build: Wheels"
-        uses: pypa/cibuildwheel@v2.16.5
+        uses: pypa/cibuildwheel@v2.17.0
         with:
             output-dir: dist
         env:
