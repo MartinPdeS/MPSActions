@@ -37,3 +37,4 @@ runs:
             packages_dir: dist/*/
             user: __token__
             password: "${{ env.MY_SECRET }}"
+            verbose: true
