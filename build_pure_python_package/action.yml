@@ -33,7 +33,8 @@ runs:
             python -m pip install wheel build
             python -m pip install -e .[testing]
             pytest -s
-            python setup.py bdist_wheel
+            python -m build
+            # python setup.py bdist_wheel
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
