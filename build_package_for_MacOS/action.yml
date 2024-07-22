@@ -19,12 +19,9 @@ runs:
             output-dir: dist
         env:
             FC: "/usr/local/bin/gfortran"
-            MACOSX_DEPLOYMENT_TARGET: "10.14"
-            # _PYTHON_HOST_PLATFORM: "macosx-10.13-x86_64"
             CIBW_ENVIRONMENT_MACOS:
                 PROJ_WHEEL=true
                 PROJ_NETWORK=ON
-                MACOSX_DEPLOYMENT_TARGET=10.14
 
 
       - name: "Upload: Wheel"
