@@ -41,7 +41,7 @@ runs:
         uses: actions/upload-artifact@v2
         with:
           name: coverage-report
-          path: path/to/coverage.html
+          path: ./htmlcov
 
       # - name: "Upload: Coverage badge"
       #   uses: schneegans/dynamic-badges-action@v1.7.0
