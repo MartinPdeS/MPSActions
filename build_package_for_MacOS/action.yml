@@ -21,7 +21,7 @@ runs:
         env:
             FC: "/usr/local/bin/gfortran"
             CIBW_ENVIRONMENT_MACOS:
-                MACOSX_DEPLOYMENT_TARGET:14.0
+                MACOSX_DEPLOYMENT_TARGET=14.0
                 PROJ_WHEEL=true
                 PROJ_NETWORK=ON
 
