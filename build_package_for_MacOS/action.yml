@@ -24,6 +24,10 @@ runs:
             output-dir: dist
         env:
             FC: "/usr/local/bin/gfortran"
+            CIBW_ENVIRONMENT_MACOS:
+                PROJ_WHEEL=true
+                PROJ_NETWORK=ON
+
 
       - name: "Upload: Wheel"
         uses: actions/upload-artifact@v3
