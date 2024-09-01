@@ -15,7 +15,7 @@ runs:
         id: setup-fortran
 
       - name: "Build: Wheels"
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.20.0
         with:
             output-dir: dist
         env:
