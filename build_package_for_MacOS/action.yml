@@ -14,10 +14,6 @@ runs:
         uses: fortran-lang/setup-fortran@v1
         id: setup-fortran
 
-      # - name: Install specific delocate version
-      #   shell: bash
-      #   run: pip install delocate==0.11.0
-
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.20.0
         with:
@@ -25,6 +21,7 @@ runs:
         env:
             FC: "/usr/local/bin/gfortran"
             CIBW_ENVIRONMENT_MACOS:
+                MACOSX_DEPLOYMENT_TARGET:14.0
                 PROJ_WHEEL=true
                 PROJ_NETWORK=ON
 
