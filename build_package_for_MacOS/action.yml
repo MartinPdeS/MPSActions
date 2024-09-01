@@ -14,8 +14,8 @@ runs:
         uses: fortran-lang/setup-fortran@v1
         id: setup-fortran
 
-      - name: Install specific delocate version
-        run: pip install delocate==0.11.0
+      - name: Set Greeting
+        run: echo "Hello $INPUT_WHO_TO_GREET."
 
       - name: "Build: Wheels"
         uses: pypa/cibuildwheel@v2.20.0
