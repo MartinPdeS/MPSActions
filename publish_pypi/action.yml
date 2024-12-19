@@ -1,0 +1,40 @@
+name: "Publish to PyPi"
+description: "Build and publish the package to PyPi"
+
+inputs:
+    python-version:
+        description: 'Python version for installation'
+        required: true
+    password:
+        description: 'Name of the package to install'
+        required: true
+
+
+runs:
+    using: "composite"
+    steps:
+      - name: "Set-up: Python ${{ inputs.python-version }}"
+        uses: actions/setup-python@v4
+        with:
+            python-version: "${{ inputs.python-version }}"
+
+      - name: "Install: Dependencies"
+        shell: bash
+        run: |
+            python -m pip install --upgrade pip
+            python -m pip install twine
+
+      - name: "Download: wheel"
+        uses: actions/download-artifact@v3
+        with:
+            path: dist
+
+      - name: "Publish: Wheel"
+        uses: pypa/gh-action-pypi-publish@v1.5.1
+        env:
+            MY_SECRET: ${{ inputs.password }}
+        with:
+            packages_dir: dist/*/
+            user: __token__
+            password: "${{ env.MY_SECRET }}"
+            verbose: true

@@ -1,0 +1,44 @@
+name: Ubuntu-build-pure-package
+
+permissions:
+    contents: write
+
+
+inputs:
+    python-version:
+        type: string
+        required: false
+        default: '3.10'
+
+
+runs:
+    using: "composite"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            submodules: 'true'
+
+      - uses: MartinPdeS/MPSActions/interpret_python_version@master
+        with:
+            python-version: ${{ inputs.python-version }}
+
+      - uses: actions/setup-python@v4
+        with:
+            python-version: ${{ inputs.python-version }}
+
+      - name: "Running unittests and building wheel"
+        shell: bash
+        run: |
+            python -m pip install --upgrade pip
+            python -m pip install wheel build
+            python -m pip install -e .[testing]
+            pytest -s
+            python -m build
+            # python setup.py bdist_wheel
+
+      - name: "Upload: Wheel"
+        uses: actions/upload-artifact@v3
+        with:
+            name: "manylinux_wheel_python"
+            path: ./dist/*
+

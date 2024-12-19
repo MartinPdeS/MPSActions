@@ -1,0 +1,51 @@
+name: Build and Upload Conda Package
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        required: true
+        type: string
+    secrets:
+      ANACONDA_API_TOKEN:
+        required: true
+
+jobs:
+  conda_deployment:
+    name: Deploy Conda Package on OS [${{ matrix.os }}] -- Python [${{ matrix.python-version }}]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ${{ fromJson(inputs.python-versions) }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set Up Conda Environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: true
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge, martinpdes, defaults
+
+      - name: Install Conda Tools
+        run: |
+          conda install -y anaconda-client conda-build
+          conda config --set report_errors false
+
+      - name: Configure Conda Upload
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            conda config --set anaconda_upload true
+          else
+            conda config --set anaconda_upload false
+          fi
+
+      - name: Build Conda Package
+        run: |
+          conda build . --python ${{ matrix.python-version }} --user martinpdes --token ${{ secrets.ANACONDA_API_TOKEN }}

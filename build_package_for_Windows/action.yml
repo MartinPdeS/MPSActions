@@ -1,0 +1,41 @@
+name: "Windows build"
+description: "Build and upload package for MacOS [> 10.13] systems"
+
+runs:
+    using: "composite"
+    steps:
+      - name: "Checkout repository "
+        uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+            submodules: true
+
+      - uses: msys2/setup-msys2@v2
+        with:
+            path-type: inherit
+            msystem: MINGW64
+            install: >-
+                mingw-w64-x86_64-toolchain
+                mingw-w64-x86_64-cmake
+                mingw-w64-x86_64-openmp
+                mingw-w64-x86_64-ninja
+                mingw-w64-x86_64-gcc-fortran
+
+      - uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: "Build: Wheels"
+        uses: pypa/cibuildwheel@v2.17.0
+        with:
+            output-dir: dist
+        env:
+            CMAKE_GENERATOR: Ninja
+            CMAKE_MAKE_PROGRAM: ninja
+
+      - name: "Upload: Wheel"
+        uses: actions/upload-artifact@v3
+        with:
+            name: "windows_wheel_python"
+            path: ./dist/*
+
+
+

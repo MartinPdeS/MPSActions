@@ -1,0 +1,25 @@
+name: "ManyLinux build"
+description: "Build and upload package for ManyLinux systems"
+
+runs:
+    using: "composite"
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+            submodules: 'true'
+
+      - name: "Build: Wheels"
+        uses: pypa/cibuildwheel@v2.19.2
+        with:
+            output-dir: dist
+        env:
+            CC: "/usr/bin/gcc"
+            CXX: "/usr/bin/g++"
+
+      - name: "Upload: Wheel"
+        uses: actions/upload-artifact@v3
+        with:
+            name: "manylinux_wheel_python"
+            path: ./dist/*
