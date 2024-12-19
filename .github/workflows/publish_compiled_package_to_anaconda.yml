@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Conda Tools
         run: |
-          conda install -y anaconda-client conda-build conda-anaconda-telemetry
+          conda install -y anaconda-client conda-build
 
       - name: Configure Conda Upload
         run: |
