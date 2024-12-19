@@ -20,20 +20,6 @@ jobs:
             fetch-depth: 0
             submodules: 'true'
 
-        - name: "translate python version to cp"
-          shell: bash
-          run: |
-              echo "Python version to be translated: ${{inputs.python-version}} saved in env.dotted_python_version"
-
-              TEMP=${{ inputs.python-version }}
-              PYTHON_CP_VERSION="cp${TEMP//./}"
-
-              echo "PYTHON_CP_VERSION=$PYTHON_CP_VERSION" >> $GITHUB_ENV
-              echo "dotted_python_version=$TEMP" >> $GITHUB_ENV
-              echo "cp_python_version=$PYTHON_CP_VERSION" >> $GITHUB_ENV
-
-              echo "Python version translated to: $PYTHON_CP_VERSION saved in env.cp_python_version"
-
         - uses: actions/setup-python@v4
           with:
               python-version: ${{ inputs.python-version }}
