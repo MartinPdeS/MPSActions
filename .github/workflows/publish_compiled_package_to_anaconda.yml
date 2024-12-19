@@ -35,8 +35,8 @@ jobs:
 
       - name: Install Conda Tools
         run: |
-          conda install -y anaconda-client conda-build
-          conda config --set report_errors false
+          conda install -y anaconda-client conda-build anaconda-telemetry
+          conda remove --name base conda-anaconda-telemetry
 
       - name: Configure Conda Upload
         run: |
