@@ -39,8 +39,7 @@ jobs:
 
       - name: Disable Anaconda Telemetry
         run: |
-          anaconda config --set anaconda_upload false
-          anaconda config --set anaconda_telemetry_enabled false
+          conda config --set report_errors false
 
       - name: Configure Conda Upload
         run: |
