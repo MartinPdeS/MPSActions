@@ -29,25 +29,17 @@ jobs:
       - name: Set Up Conda Environment
         uses: conda-incubator/setup-miniconda@v3
         with:
+          miniconda-version: 'latest'
           auto-activate-base: true
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
-      - name: Update Conda
-        run: |
-          source $CONDA/bin/activate
-          conda update -n base -c defaults conda
-          conda update -n base -c defaults conda-build
-          conda update -n base -c defaults anaconda-client
-
       - name: Install Conda Tools
         run: |
-          source $CONDA/bin/activate
-          conda install -y anaconda-client conda-build
+          conda install -y anaconda-client conda-build conda-anaconda-telemetry
 
       - name: Configure Conda Upload
         run: |
-          source $CONDA/bin/activate
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             conda config --set anaconda_upload true
           else
@@ -56,5 +48,4 @@ jobs:
 
       - name: Build Conda Package
         run: |
-          source $CONDA/bin/activate
           conda build . --python ${{ matrix.python-version }} --user martinpdes --token ${{ secrets.ANACONDA_API_TOKEN }}
