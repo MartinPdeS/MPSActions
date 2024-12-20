@@ -37,6 +37,11 @@ jobs:
         run: |
           conda install -y anaconda-client conda-build
 
+      - name: Disable Anaconda Telemetry
+        run: |
+          anaconda config --set anaconda_upload false
+          anaconda config --set anaconda_telemetry_enabled false
+
       - name: Configure Conda Upload
         run: |
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
