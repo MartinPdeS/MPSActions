@@ -69,7 +69,7 @@ jobs:
       - name: Download and process template_index.html
         run: |
           # Download the template_index.html
-          curl -o template_index.html https://github.com/MartinPdeS/MPSActions/raw/asset/template_index.html
+          curl -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
 
           # Replace <package> with the provided package name and save to the docs directory
           sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > ./index.html
