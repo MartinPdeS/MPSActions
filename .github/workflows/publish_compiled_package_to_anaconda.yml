@@ -34,9 +34,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
-      - name: Install Conda Tools
-        run: |
-          conda install -y anaconda-client conda-build conda-anaconda-telemetry
+      # - name: Install Conda Tools
+      #   run: |
+      #     conda install -y anaconda-client conda-build conda-anaconda-telemetry
 
       - name: Configure Conda Upload
         run: |
@@ -48,5 +48,6 @@ jobs:
 
       - name: Build Conda Package
         run: |
+          conda install -y anaconda-client conda-build conda-anaconda-telemetry
           conda build . --python ${{ matrix.python-version }} --user martinpdes --token ${{ secrets.ANACONDA_API_TOKEN }}
           
