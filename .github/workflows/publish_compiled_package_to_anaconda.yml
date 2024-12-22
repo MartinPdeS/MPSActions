@@ -54,5 +54,7 @@ jobs:
           # Build the package
           conda build . --python ${{ matrix.python-version }}
 
+          conda list | grep plugin
+
           # Upload the package if the upload flag is set
           anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
