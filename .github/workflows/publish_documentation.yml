@@ -66,6 +66,15 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
+      - name: Download and process template_index.html
+        run: |
+          # Download the template_index.html
+          curl -o template_index.html https://github.com/MartinPdeS/MPSActions/raw/asset/template_index.html
+
+          # Replace <package> with the provided package name and save to the docs directory
+          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > ./index.html
+          rm -rf template_index.html
+
       - name: Update new documentation version
         run: |
           rm -rf docs/${{ env.tag }}
@@ -79,14 +88,13 @@ jobs:
           json_file="version_switcher.json"
           rm $json_file
           docs_path="docs"
-          base_url="https://martinpdes.github.io/${{ inputs.package-name}}"
+          base_url="https://martinpdes.github.io/${{ inputs.package-name }}"
 
           # Start the JSON array
           echo "[" > $json_file
 
           # Get sorted version directories in descending order
           version_dirs=$(ls -v $docs_path | sort -V -r)
-
 
           # Loop over sorted versions and add to JSON file
           first_entry=true
