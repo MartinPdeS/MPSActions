@@ -52,7 +52,7 @@ jobs:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           # Build the package
-          conda list | grep plugin
+          # conda list | grep plugin
           conda build . --python ${{ matrix.python-version }}
 
           
