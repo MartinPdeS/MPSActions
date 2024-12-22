@@ -53,6 +53,16 @@ jobs:
         run: |
           # Build the package
           # conda list | grep plugin
+
+
+
+          conda update -n base -c defaults conda
+          conda install -y conda-build anaconda-client
+          conda remove -n base conda-anaconda-telemetry
+
+          conda config --set enable_plugins false
+
+
           conda build . --python ${{ matrix.python-version }}
 
           
