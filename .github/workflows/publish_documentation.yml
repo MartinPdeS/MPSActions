@@ -71,7 +71,7 @@ jobs:
           rm -rf docs/${{ env.tag }}
           rm -rf docs/latest
           mv /tmp/documentation_build docs/${{ env.tag }}
-          cp docs/${{ env.tag }} docs/latest
+          cp -r docs/${{ env.tag }} docs/latest
 
       - name: Scan, sort versions, and update version_switcher.json
         run: |
