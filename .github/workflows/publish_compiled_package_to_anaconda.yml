@@ -34,20 +34,25 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
-      # - name: Install Conda Tools
-      #   run: |
-      #     conda install -y anaconda-client conda-build conda-anaconda-telemetry
+      - name: Install Conda Tools
+        run: |
+          conda install -y anaconda-client conda-build
 
       - name: Configure Conda Upload
         run: |
+          # Enable or disable upload based on the event type
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             conda config --set anaconda_upload true
           else
             conda config --set anaconda_upload false
           fi
 
-      - name: Build Conda Package
+      - name: Build and Upload Conda Package
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
-          conda install -y anaconda-client conda-build conda-anaconda-telemetry
-          conda build . --python ${{ matrix.python-version }} --user martinpdes --token ${{ secrets.ANACONDA_API_TOKEN }}
-          
+          # Build the package
+          conda build . --python ${{ matrix.python-version }}
+
+          # Upload the package if the upload flag is set
+          anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
