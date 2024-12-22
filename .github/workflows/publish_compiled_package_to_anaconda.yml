@@ -49,3 +49,4 @@ jobs:
       - name: Build Conda Package
         run: |
           conda build . --python ${{ matrix.python-version }} --user martinpdes --token ${{ secrets.ANACONDA_API_TOKEN }}
+          

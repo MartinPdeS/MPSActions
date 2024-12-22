@@ -69,7 +69,9 @@ jobs:
       - name: Update new documentation version
         run: |
           rm -rf docs/${{ env.tag }}
+          rm -rf docs/latest
           mv /tmp/documentation_build docs/${{ env.tag }}
+          cp /tmp/documentation_build docs/latest
 
       - name: Scan, sort versions, and update version_switcher.json
         run: |
