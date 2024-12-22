@@ -79,7 +79,7 @@ jobs:
           json_file="version_switcher.json"
           rm $json_file
           docs_path="docs"
-          base_url="https://martinpdes.github.io/{{ inputs.package-name}}"
+          base_url="https://martinpdes.github.io/${{ inputs.package-name}}"
 
           # Start the JSON array
           echo "[" > $json_file
