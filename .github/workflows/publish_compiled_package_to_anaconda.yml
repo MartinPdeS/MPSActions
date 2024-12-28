@@ -59,4 +59,4 @@ jobs:
 
           conda build . --python ${{ matrix.python-version }}
 
-          anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
+          # anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
