@@ -53,7 +53,7 @@ jobs:
 
       - name: "Sphinx build"
         run: |
-          sphinx-build -b html docs/source /tmp/documentation_build -vv
+          sphinx-build -b html docs/source /tmp/documentation_build
 
       - name: Checkout Pages Branch
         uses: actions/checkout@v4
