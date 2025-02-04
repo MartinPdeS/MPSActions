@@ -30,7 +30,7 @@ jobs:
             CXX: "/usr/bin/g++"
 
         - name: "Upload: Wheel"
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: "manylinux_wheel_python"
             path: ./dist/*
