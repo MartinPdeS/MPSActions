@@ -61,7 +61,7 @@ jobs:
                 python -m pip install twine
 
           - name: "Download: Wheel Artifact"
-            uses: actions/download-artifact@v3
+            uses: actions/download-artifact@v4
             with:
                 name: wheel-artifact
                 path: ./dist
