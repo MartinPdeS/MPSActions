@@ -1,4 +1,4 @@
-,name: Build and Upload Package Documentation on GitHub Pages
+name: Build and Upload Package Documentation on GitHub Pages
 
 on:
   workflow_call:
