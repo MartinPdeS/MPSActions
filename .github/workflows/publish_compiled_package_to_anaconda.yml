@@ -12,7 +12,7 @@ on:
 
 jobs:
   conda_deployment:
-    name: ${{ matrix.os }} -- Python [${{ matrix.python-version }}]
+    name: ${{ matrix.os }} -- Python${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
