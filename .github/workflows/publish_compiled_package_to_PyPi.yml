@@ -6,6 +6,10 @@ on:
       python-version:
         required: true
         type: string
+      brew-package:
+        required: false
+        type: string
+        
     secrets:
       PYPI_API_TOKEN:
         required: true
@@ -44,7 +48,7 @@ jobs:
 
         - name: Update Homebrew
           run: |
-            brew install fftw
+            brew install ${{ inputs.brew-package }}"
 
         - name: "Checkout repository"
           uses: actions/checkout@v4
