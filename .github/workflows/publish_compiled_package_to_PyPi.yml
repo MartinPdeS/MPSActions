@@ -9,7 +9,7 @@ on:
       brew-package:
         required: false
         type: string
-      yum-package:
+      apt-package:
         required: false
         type: string
         
@@ -30,7 +30,7 @@ jobs:
 
         - name: Install brew packages
           run: |
-            yum install -y ${{ inputs.yum-package }}
+            sudo apt install -y ${{ inputs.apt-package }}
 
         - name: "Build: Wheels"
           uses: pypa/cibuildwheel@v2.19.2
