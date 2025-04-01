@@ -44,7 +44,7 @@ jobs:
 
         - name: Update Homebrew
           run: |
-            brew update --preinstall
+            brew install fftw
 
         - name: "Checkout repository"
           uses: actions/checkout@v4
