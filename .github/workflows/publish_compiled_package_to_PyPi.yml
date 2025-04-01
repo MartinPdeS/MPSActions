@@ -30,7 +30,7 @@ jobs:
 
         - name: Install brew packages
           run: |
-            yum install -y ${{ inputs.yum-package }}"
+            yum install -y ${{ inputs.yum-package }}
 
         - name: "Build: Wheels"
           uses: pypa/cibuildwheel@v2.19.2
@@ -55,7 +55,7 @@ jobs:
 
         - name: Install brew packages
           run: |
-            brew install ${{ inputs.brew-package }}"
+            brew install ${{ inputs.brew-package }}
 
         - name: "Checkout repository"
           uses: actions/checkout@v4
