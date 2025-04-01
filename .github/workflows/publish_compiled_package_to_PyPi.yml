@@ -30,7 +30,7 @@ jobs:
 
         - name: Install brew packages
           run: |
-            sudo apt install -y ${{ inputs.apt-package }}
+            sudo apt-get install -y ${{ inputs.apt-package }}
 
         - name: "Build: Wheels"
           uses: pypa/cibuildwheel@v2.19.2
