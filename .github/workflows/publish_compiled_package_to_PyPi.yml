@@ -9,6 +9,9 @@ on:
       brew-package:
         required: false
         type: string
+      yum-package:
+        required: false
+        type: string
         
     secrets:
       PYPI_API_TOKEN:
@@ -24,6 +27,10 @@ jobs:
           with:
             fetch-depth: 0
             submodules: 'true'
+
+        - name: Install brew packages
+          run: |
+            yum install -y ${{ inputs.yum-package }}"
 
         - name: "Build: Wheels"
           uses: pypa/cibuildwheel@v2.19.2
@@ -46,7 +53,7 @@ jobs:
           with:
               xcode-version: '15.3'
 
-        - name: Update Homebrew
+        - name: Install brew packages
           run: |
             brew install ${{ inputs.brew-package }}"
 
