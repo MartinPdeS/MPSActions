@@ -6,6 +6,10 @@ on:
       python-versions:
         required: true
         type: string
+      apt-package:
+        required: false
+        type: string
+        
     secrets:
       ANACONDA_API_TOKEN:
         required: true
@@ -35,10 +39,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
+      - name: Install brew packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-package }}
+
       - name: Install Conda Tools
         run: |
           conda install -y anaconda-client conda-build
-          conda install conda-forge::fftw
 
       - name: Configure Conda Upload
         run: |
