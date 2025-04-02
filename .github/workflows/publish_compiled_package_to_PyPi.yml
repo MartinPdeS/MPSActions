@@ -104,7 +104,7 @@ jobs:
             install: >-
                 ${{ inputs.mingw-package }}
                 mingw-w64-x86_64-toolchain
-                mingw-w64-x86_64-cmake
+                # mingw-w64-x86_64-cmake
                 mingw-w64-x86_64-openmp
                 mingw-w64-x86_64-ninja
                 mingw-w64-x86_64-gcc-fortran
@@ -116,9 +116,9 @@ jobs:
           uses: pypa/cibuildwheel@v2.17.0
           with:
             output-dir: dist
-          env:
-            CMAKE_GENERATOR: Ninja
-            CMAKE_MAKE_PROGRAM: ninja
+          # env:
+          #   CMAKE_GENERATOR: Ninja
+          #   CMAKE_MAKE_PROGRAM: ninja
 
         - name: "Upload: Wheel"
           uses: actions/upload-artifact@v4
