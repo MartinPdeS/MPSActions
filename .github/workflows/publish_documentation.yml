@@ -9,6 +9,9 @@ on:
       package-name:
         required: true
         type: string
+      apt-package:
+        required: false
+        type: string
 
 jobs:
   deploy_documentation:
@@ -26,7 +29,7 @@ jobs:
       - name: "Install: Dependencies for headless server"
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb jq
+          sudo apt-get install -y ${{ inputs.apt-package }}
 
       - name: "Checkout requirements and files for testing"
         uses: actions/checkout@v4
