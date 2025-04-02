@@ -115,6 +115,9 @@ jobs:
           uses: pypa/cibuildwheel@v2.17.0
           with:
             output-dir: dist
+          env:
+            PKG_CONFIG_EXECUTABLE: "C:/msys64/mingw64/bin/pkg-config.exe"
+            PATH: "C:/msys64/mingw64/bin;${{ env.PATH }}"
           # env:
           #   CMAKE_GENERATOR: Ninja
           #   CMAKE_MAKE_PROGRAM: ninja
