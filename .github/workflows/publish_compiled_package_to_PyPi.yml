@@ -102,7 +102,7 @@ jobs:
             path-type: inherit
             msystem: MINGW64
             install: >-
-                ${{ inputs.apt-package }}
+                ${{ inputs.mingw-package }}
                 mingw-w64-x86_64-toolchain
                 mingw-w64-x86_64-cmake
                 mingw-w64-x86_64-openmp
