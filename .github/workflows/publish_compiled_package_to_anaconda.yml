@@ -38,6 +38,7 @@ jobs:
       - name: Install Conda Tools
         run: |
           conda install -y anaconda-client conda-build
+          conda install conda-forge::fftw
 
       - name: Configure Conda Upload
         run: |
