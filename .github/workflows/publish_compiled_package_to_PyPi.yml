@@ -131,7 +131,8 @@ jobs:
           with:
             output-dir: dist
           env:
-            PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
+            PKG_CONFIG_EXECUTABLE: "D:\a\_temp\msys64\mingw64\bin\pkg-config.exe"
+            # PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
             # PATH: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;${{ env.PATH }}"
             # CMAKE_GENERATOR: Ninja
             # CMAKE_MAKE_PROGRAM: ninja
