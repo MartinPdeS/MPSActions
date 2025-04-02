@@ -12,6 +12,9 @@ on:
       apt-package:
         required: false
         type: string
+      mingw-package:
+        required: false
+        type: string
         
     secrets:
       PYPI_API_TOKEN:
@@ -99,12 +102,12 @@ jobs:
             path-type: inherit
             msystem: MINGW64
             install: >-
+                ${{ inputs.apt-package }}
                 mingw-w64-x86_64-toolchain
                 mingw-w64-x86_64-cmake
                 mingw-w64-x86_64-openmp
                 mingw-w64-x86_64-ninja
                 mingw-w64-x86_64-gcc-fortran
-                mingw-w64-x86_64-fftw
 
         - uses: seanmiddleditch/gha-setup-ninja@master
 
