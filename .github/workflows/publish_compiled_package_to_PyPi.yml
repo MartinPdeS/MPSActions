@@ -97,14 +97,13 @@ jobs:
             fetch-depth: 0
             submodules: true
 
-        - uses: msys2/setup-msys2@v2
+        - uses: msys2/setup-msys2@v2  # mingw-w64-x86_64-cmake
           with:
             path-type: inherit
             msystem: MINGW64
             install: >-
                 ${{ inputs.mingw-package }}
                 mingw-w64-x86_64-toolchain
-                # mingw-w64-x86_64-cmake
                 mingw-w64-x86_64-openmp
                 mingw-w64-x86_64-ninja
                 mingw-w64-x86_64-gcc-fortran
