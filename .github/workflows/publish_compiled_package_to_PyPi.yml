@@ -104,6 +104,7 @@ jobs:
                 mingw-w64-x86_64-openmp
                 mingw-w64-x86_64-ninja
                 mingw-w64-x86_64-gcc-fortran
+                mingw-w64-x86_64-fftw
 
         - uses: seanmiddleditch/gha-setup-ninja@master
 
