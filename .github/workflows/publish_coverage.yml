@@ -6,9 +6,14 @@ on:
       python-version:
         required: true
         type: string
+      apt-package:
+        required: false
+        type: string
+  
     secrets:
       _GITHUB_TOKEN:
         required: true
+
 
 jobs:
   coverage:
@@ -22,12 +27,10 @@ jobs:
         with:
             python-version: ${{ inputs.python-version }}
 
-      - name: "Install: Dependencies for headless server"
-        shell: bash
+      - name: "Install: apt-get dependencies"
         run: |
-            sudo apt-get update
-            # sudo apt-get install libgl1-mesa-glx xvfb
-            sudo apt-get install xvfb
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-package }}
 
       - name: "Checkout requirements and files for testing"
         uses: actions/checkout@v4
