@@ -98,6 +98,7 @@ jobs:
             submodules: true
 
         - uses: msys2/setup-msys2@v2  # mingw-w64-x86_64-cmake
+          id: msys2
           with:
             path-type: inherit
             msystem: MINGW64
@@ -116,11 +117,10 @@ jobs:
           with:
             output-dir: dist
           env:
-            PKG_CONFIG_EXECUTABLE: "C:/msys64/mingw64/bin/pkg-config.exe"
-            PATH: "C:/msys64/mingw64/bin;${{ env.PATH }}"
-          # env:
-          #   CMAKE_GENERATOR: Ninja
-          #   CMAKE_MAKE_PROGRAM: ninja
+            PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
+            PATH: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;${{ env.PATH }}"
+            CMAKE_GENERATOR: Ninja
+            CMAKE_MAKE_PROGRAM: ninja
 
         - name: "Upload: Wheel"
           uses: actions/upload-artifact@v4
