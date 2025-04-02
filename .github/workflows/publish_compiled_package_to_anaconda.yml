@@ -39,10 +39,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
-      - name: Install brew packages
+      # - name: Install brew packages
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y ${{ inputs.apt-package }}
+
+      - name: Install yum packages
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ inputs.apt-package }}
+
 
       - name: Install Conda Tools
         run: |
