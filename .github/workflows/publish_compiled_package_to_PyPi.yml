@@ -112,12 +112,15 @@ jobs:
 
         - uses: seanmiddleditch/gha-setup-ninja@master
 
+        - name: Add MSYS2 to PATH
+          run: echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $GITHUB_PATH
+
         - name: "Build: Wheels"
           uses: pypa/cibuildwheel@v2.17.0
           with:
             output-dir: dist
-          # env:
-            # PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
+          env:
+            PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
             # PATH: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;${{ env.PATH }}"
             # CMAKE_GENERATOR: Ninja
             # CMAKE_MAKE_PROGRAM: ninja
