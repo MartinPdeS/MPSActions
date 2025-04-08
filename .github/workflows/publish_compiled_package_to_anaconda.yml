@@ -9,6 +9,9 @@ on:
       apt-package:
         required: false
         type: string
+      brew-package:
+        required: false
+        type: string
         
     secrets:
       ANACONDA_API_TOKEN:
@@ -44,12 +47,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libfftw3-double3 libfftw3-dev
+          # sudo apt-get install -y ${{inputs.apt-package}}
 
       - name: Install brew packages (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
           brew install fftw
+          # sudo brew install -y ${{inputs.brew-package}}
 
 
       - name: Install Conda Tools
