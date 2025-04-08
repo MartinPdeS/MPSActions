@@ -76,6 +76,8 @@ jobs:
         run: |
           # Build the package
 
+          conda activate base
+          echo "CONDA_PREFIX is: $CONDA_PREFIX"
 
           echo -------------------------------
           ls /usr/include
