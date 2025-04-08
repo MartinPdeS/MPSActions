@@ -83,7 +83,9 @@ jobs:
           conda install -c conda-forge fftw
           conda install conda-forge::fftw
 
+          echo ++++++++++++++++++++++++++++++++++
           conda list | grep fftw
+          echo ++++++++++++++++++++++++++++++++++
           
           conda update -n base -c defaults conda
           conda install -y conda-build anaconda-client
