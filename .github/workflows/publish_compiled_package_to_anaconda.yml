@@ -86,8 +86,12 @@ jobs:
           echo ++++++++++++++++++++++++++++++++++
           conda list | grep fftw
           echo ++++++++++++++++++++++++++++++++++
+          ls $CONDA_PREFIX/include/fftw3.h
+          echo ++++++++++++++++++++++++++++++++++
+          
 
           find $CONDA_PREFIX -name fftw3.pc
+          echo ++++++++++++++++++++++++++++++++++
           
           conda update -n base -c defaults conda
           conda install -y conda-build anaconda-client
