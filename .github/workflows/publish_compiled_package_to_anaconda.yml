@@ -99,6 +99,9 @@ jobs:
           find $CONDA_PREFIX -name "libfftw3.*"
           echo ++++++++++++++++++++++++++++++++++
           export PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH
+          echo ================================
+          pkg-config --libs fftw3
+          echo ================================
           
           conda update -n base -c defaults conda
           conda install -y conda-build anaconda-client
