@@ -39,15 +39,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
 
-      # - name: Install brew packages
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y ${{ inputs.apt-package }}
+      - name: Install apt packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfftw3-double3 libfftw3-dev
 
-      # - name: Install yum packages
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y ${{ inputs.apt-package }}
+      - name: Install brew packages (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install fftw
 
 
       - name: Install Conda Tools
