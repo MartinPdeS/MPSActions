@@ -75,7 +75,7 @@ jobs:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           # Build the package
-
+          source "$(conda info --base)/etc/profile.d/conda.sh"
           conda activate base
           echo "CONDA_PREFIX is: $CONDA_PREFIX"
 
