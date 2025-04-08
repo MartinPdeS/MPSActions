@@ -41,22 +41,7 @@ jobs:
           auto-activate-base: true
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
-
-      # - name: Install apt packages (Linux)
-      #   if: runner.os == 'Linux'
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y libfftw3-double3 libfftw3-dev
-      #     # sudo apt-get install -y ${{inputs.apt-package}}
-
-      # - name: Install brew packages (macOS)
-      #   if: runner.os == 'macOS'
-      #   run: |
-      #     brew update
-      #     brew install fftw
-      #     # sudo brew install -y ${{inputs.brew-package}}
-
-
+      
       - name: Install Conda Tools
         run: |
           conda install -y anaconda-client conda-build
@@ -99,6 +84,7 @@ jobs:
           find $CONDA_PREFIX -name "libfftw3.*"
           echo ++++++++++++++++++++++++++++++++++
           export PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH
+          export CMAKE_PREFIX_PATH=$CONDA_PREFIX:$CMAKE_PREFIX_PATH
           echo ================================
           pkg-config --libs fftw3
           echo ================================
