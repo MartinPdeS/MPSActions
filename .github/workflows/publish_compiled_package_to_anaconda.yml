@@ -60,46 +60,14 @@ jobs:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           # Build the package
-
-          # echo "CONDA_PREFIX is: $CONDA_PREFIX"
-
-          # echo -------------------------------
-          # ls /usr/include
-          # echo -------------------------------
-          # conda install -c conda-forge fftw
-          # conda install conda-forge::fftw
-
-          # echo ++++++++++++++++++++++++++++++++++
-          # conda list | grep fftw
-          # echo ++++++++++++++++++++++++++++++++++
-          # ls $CONDA_PREFIX/include/fftw3.h
-          # echo ++++++++++++++++++++++++++++++++++
-          
-
-          # find $CONDA_PREFIX -name fftw3.pc
-          # echo ++++++++++++++++++++++++++++++++++
-          # find $CONDA_PREFIX -name fftw3.h
-          # echo ++++++++++++++++++++++++++++++++++
-          # find $CONDA_PREFIX -name "libfftw3.*"
-          # echo ++++++++++++++++++++++++++++++++++
-
-          # echo ================================
-          # pkg-config --libs fftw3
-          # echo ================================
-
-
-
           source "$(conda info --base)/etc/profile.d/conda.sh"
           conda activate base
 
           conda install conda-forge::fftw
 
-
-          echo "CONDA_PREFIX: $CONDA_PREFIX"
           export PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH
           export CMAKE_PREFIX_PATH=$CONDA_PREFIX:$CMAKE_PREFIX_PATH
-          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-          echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+
           
           conda update -n base -c defaults conda
           conda install -y conda-build anaconda-client
