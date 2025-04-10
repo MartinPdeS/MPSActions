@@ -33,7 +33,6 @@ on:
 
 jobs:
     ManyLinux_x86_64:
-      if: ${{ inputs.build-Linux == 'true' }}
       runs-on: ubuntu-latest
       steps:
         - name: "Skip Linux Build"
@@ -68,7 +67,6 @@ jobs:
             path: ./dist/*
 
     macos_x86_64:
-      if: ${{ inputs.build-macOS == 'true' }}
       runs-on: macos-latest
       steps:
         - name: "Skip macOs Build"
@@ -113,7 +111,6 @@ jobs:
             path: ./dist/*
 
     Windows_x86_64:
-      if: ${{ inputs.build-Windows == 'true' }}
       runs-on: windows-latest
       steps:
         - name: "Skip Windows Build"
