@@ -1,5 +1,8 @@
 on:
   workflow_call:
+    secrets:
+      PYPI_API_TOKEN:
+        required: true
     inputs:
       python-version:
         required: true
@@ -30,9 +33,7 @@ on:
         type: string
         default: "v2.20.0"
           
-    secrets:
-      PYPI_API_TOKEN:
-        required: true
+
 
 
 jobs:
