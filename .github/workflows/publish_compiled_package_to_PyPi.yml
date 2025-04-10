@@ -151,7 +151,7 @@ jobs:
               Write-Host "❌ pkg-config not found at: $pkg"
             }
 
-        - name: Build: Wheels
+        - name: "Build: Wheels"
           if: ${{ inputs.build-Windows == 'true' }}
           uses: pypa/cibuildwheel@v2.17.0
           with:
