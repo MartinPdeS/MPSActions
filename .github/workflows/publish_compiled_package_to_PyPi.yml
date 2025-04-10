@@ -26,7 +26,7 @@ on:
         required: false
         type: string
     cibuildwheel-version:
-      required: true
+      required: false
       type: string
       default: "v2.20.0"
         
