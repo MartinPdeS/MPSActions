@@ -42,13 +42,13 @@ jobs:
             fetch-depth: 0
             submodules: 'true'
 
-        - name: Install brew packages
+        - name: "Install brew packages"
           if: ${{ inputs.build-Linux == 'true' }}
           run: |
             sudo apt-get update
             sudo apt-get install -y ${{ inputs.apt-package }}
 
-        - name: "Build: Wheels"
+        - name: "Build wheels"
           if: ${{ inputs.build-Linux == 'true' }}
           uses: pypa/cibuildwheel@v2.19.2
           with:
@@ -57,7 +57,7 @@ jobs:
             CC: "/usr/bin/gcc"
             CXX: "/usr/bin/g++"
 
-        - name: "Upload: Wheel"
+        - name: "Upload wheel"
           if: ${{ inputs.build-Linux == 'true' }}
           uses: actions/upload-artifact@v4
           with:
@@ -72,7 +72,7 @@ jobs:
           with:
               xcode-version: '15.3'
 
-        - name: Install brew packages
+        - name: "Install brew packages"
           if: ${{ inputs.build-macOS == 'true' }}
           run: |
             brew install ${{ inputs.brew-package }}
@@ -84,12 +84,12 @@ jobs:
             fetch-depth: 0
             submodules: true
 
-        - name: Setup GNU Fortran
+        - name: "Setup GNU Fortran"
           if: ${{ inputs.build-macOS == 'true' }}
           uses: fortran-lang/setup-fortran@v1
           id: setup-fortran
 
-        - name: "Build: Wheels"
+        - name: "Build wheels"
           if: ${{ inputs.build-macOS == 'true' }}
           uses: pypa/cibuildwheel@v2.20.0
           with:
@@ -101,7 +101,7 @@ jobs:
               PROJ_WHEEL=true
               PROJ_NETWORK=ON
 
-        - name: "Upload: Wheel"
+        - name: "Upload wheel"
           if: ${{ inputs.build-macOS == 'true' }}
           uses: actions/upload-artifact@v4
           with:
@@ -111,7 +111,7 @@ jobs:
     Windows_x86_64:
       runs-on: windows-latest
       steps:    
-        - name: Checkout repository
+        - name: "Checkout repository"
           if: ${{ inputs.build-Windows == 'true' }}
           uses: actions/checkout@v4
           with:
@@ -135,11 +135,11 @@ jobs:
         - uses: seanmiddleditch/gha-setup-ninja@master
           if: ${{ inputs.build-Windows == 'true' }}
 
-        - name: Add MSYS2 to PATH
+        - name: "Add MSYS2 to PATH"
           if: ${{ inputs.build-Windows == 'true' }}
           run: echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $GITHUB_PATH
 
-        - name: Confirm pkg-config presence
+        - name: "Confirm pkg-config presence"
           if: ${{ inputs.build-Windows == 'true' }}
           shell: pwsh
           run: |
@@ -151,7 +151,7 @@ jobs:
               Write-Host "❌ pkg-config not found at: $pkg"
             }
 
-        - name: "Build: Wheels"
+        - name: "Build wheels"
           if: ${{ inputs.build-Windows == 'true' }}
           uses: pypa/cibuildwheel@v2.17.0
           with:
@@ -164,7 +164,7 @@ jobs:
             # PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
             # PATH: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;${{ env.PATH }}"
 
-        - name: "Upload: Wheel"
+        - name: "Upload wheel"
           uses: actions/upload-artifact@v4
           with:
             name: "windows_wheel_python"
@@ -175,23 +175,23 @@ jobs:
         needs: [Windows_x86_64, ManyLinux_x86_64, macos_x86_64]
         runs-on: ubuntu-latest
         steps:
-          - name: "Set-up: Python ${{ inputs.python-version }}"
+          - name: Set-up Python ${{ inputs.python-version }}
             uses: actions/setup-python@v4
             with:
                 python-version: "${{ inputs.python-version }}"
 
-          - name: "Install: Dependencies"
+          - name: "Install dependencies"
             shell: bash
             run: |
                 python -m pip install --upgrade pip
                 python -m pip install twine
 
-          - name: "Download: wheel"
+          - name: "Download wheels"
             uses: actions/download-artifact@v4
             with:
                 path: dist
 
-          - name: "Publish: Wheel"
+          - name: "Publish wheels"
             uses: pypa/gh-action-pypi-publish@v1.5.1
             with:
                 packages_dir: dist/*/
