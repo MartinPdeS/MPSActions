@@ -10,15 +10,15 @@ on:
       build-Linux:
         required: true
         type: boolean
-        default: "false"
+        default: false
       build-macOS:
         required: true
         type: boolean
-        default: "false"
+        default: false
       build-Windows:
         required: true
         type: boolean
-        default: "false"
+        default: false
       brew-package:
         required: false
         type: string
