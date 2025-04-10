@@ -55,7 +55,7 @@ jobs:
 
         - name: "Build wheels"
           if: ${{ inputs.build-Linux }}
-          uses: pypa/cibuildwheel@${{ inputs.cibuildwheel-version }}
+          uses: pypa/cibuildwheel@${{ inputs['cibuildwheel-version'] }}
           with:
             output-dir: dist
           env:
@@ -96,7 +96,7 @@ jobs:
 
         - name: "Build wheels"
           if: ${{ inputs.build-macOS }}
-          uses: pypa/cibuildwheel@${{ inputs.cibuildwheel-version }}
+          uses: pypa/cibuildwheel@${{ inputs['cibuildwheel-version'] }}
           with:
             output-dir: dist
           env:
@@ -158,7 +158,7 @@ jobs:
 
         - name: "Build wheels"
           if: ${{ inputs.build-Windows }}
-          uses: pypa/cibuildwheel@${{ inputs.cibuildwheel-version }}
+          uses: pypa/cibuildwheel@${{ inputs['cibuildwheel-version'] }}
           with:
             output-dir: dist
           env:
