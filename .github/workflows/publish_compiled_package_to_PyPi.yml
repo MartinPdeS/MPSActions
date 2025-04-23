@@ -51,7 +51,7 @@ jobs:
             submodules: true
 
         - name: "Install brew packages"
-          if: ${{ inputs.build-Linux || inputs.apt-package != ''}}
+          if: ${{ inputs.build-Linux && inputs.apt-package != ''}}
           run: |
             sudo apt-get update
             sudo apt-get install -y ${{ inputs.apt-package }}
@@ -81,7 +81,7 @@ jobs:
               xcode-version: '15.3'
 
         - name: "Install brew packages"
-          if: ${{ inputs.build-macOS || inputs.brew-package != ''}}
+          if: ${{ inputs.build-macOS && inputs.brew-package != ''}}
           run: |
             brew install ${{ inputs.brew-package }}
 
@@ -127,7 +127,7 @@ jobs:
             submodules: true
 
         - uses: msys2/setup-msys2@v2  # mingw-w64-x86_64-cmake
-          if: ${{ inputs.build-Windows || inputs.mingw-package != ''}}
+          if: ${{ inputs.build-Windows && inputs.mingw-package != ''}}
           id: msys2
           with:
             path-type: inherit
