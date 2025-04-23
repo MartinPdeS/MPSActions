@@ -48,7 +48,7 @@ jobs:
             submodules: true
 
         - name: "Install brew packages"
-          if: ${{ inputs.build-Linux }}
+          if: ${{ inputs.build-Linux || inputs.apt-package != ''}}
           run: |
             sudo apt-get update
             sudo apt-get install -y ${{ inputs.apt-package }}
@@ -78,7 +78,7 @@ jobs:
               xcode-version: '15.3'
 
         - name: "Install brew packages"
-          if: ${{ inputs.build-macOS }}
+          if: ${{ inputs.build-macOS || inputs.brew-package != ''}}
           run: |
             brew install ${{ inputs.brew-package }}
 
@@ -124,18 +124,12 @@ jobs:
             submodules: true
 
         - uses: msys2/setup-msys2@v2  # mingw-w64-x86_64-cmake
-          if: ${{ inputs.build-Windows }}
+          if: ${{ inputs.build-Windows || inputs.mingw-package != ''}}
           id: msys2
           with:
             path-type: inherit
             msystem: MINGW64
-            install: >-
-                ${{ inputs.mingw-package }}
-                mingw-w64-x86_64-toolchain
-                mingw-w64-x86_64-openmp
-                mingw-w64-x86_64-ninja
-                mingw-w64-x86_64-gcc-fortran
-                mingw-w64-x86_64-pkg-config
+            install: ${{ inputs.mingw-package }}
 
         - uses: seanmiddleditch/gha-setup-ninja@master
           if: ${{ inputs.build-Windows }}
@@ -143,18 +137,6 @@ jobs:
         - name: "Add MSYS2 to PATH"
           if: ${{ inputs.build-Windows }}
           run: echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $GITHUB_PATH
-
-        - name: "Confirm pkg-config presence"
-          if: ${{ inputs.build-Windows }}
-          shell: pwsh
-          run: |
-            $pkg = "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin\pkg-config.exe"
-            if (Test-Path $pkg) {
-              Write-Host "✅ Found pkg-config at: $pkg"
-              & $pkg --version
-            } else {
-              Write-Host "❌ pkg-config not found at: $pkg"
-            }
 
         - name: "Build wheels"
           if: ${{ inputs.build-Windows }}
