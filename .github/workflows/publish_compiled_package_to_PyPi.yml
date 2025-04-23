@@ -22,12 +22,15 @@ on:
       brew-package:
         required: false
         type: string
+        default: ""
       apt-package:
         required: false
         type: string
+        default: ""
       mingw-package:
         required: false
         type: string
+        default: ""
       cibuildwheel_version:
         required: false
         type: string
