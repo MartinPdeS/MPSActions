@@ -12,7 +12,7 @@ on:
       brew-package:
         required: false
         type: string
-        
+
     secrets:
       ANACONDA_API_TOKEN:
         required: true
@@ -34,6 +34,17 @@ jobs:
           submodules: true
           fetch-depth: 0
 
+      - name: Install APT Package (Linux)
+        if: runner.os == 'Linux' && inputs.apt-package != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-package }}
+
+      - name: Install Homebrew Package (macOS)
+        if: runner.os == 'macOS' && inputs.brew-package != ''
+        run: |
+          brew install ${{ inputs.brew-package }}
+
       - name: Set Up Conda Environment
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -41,14 +52,13 @@ jobs:
           auto-activate-base: true
           python-version: ${{ matrix.python-version }}
           channels: conda-forge, martinpdes, defaults
-      
+
       - name: Install Conda Tools
         run: |
           conda install -y anaconda-client conda-build
 
       - name: Configure Conda Upload
         run: |
-          # Enable or disable upload based on the event type
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             conda config --set anaconda_upload true
           else
@@ -59,18 +69,13 @@ jobs:
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
-          # # Build the package
-          # source "$(conda info --base)/etc/profile.d/conda.sh"
-          # conda activate base
-
-          # export PKG_CONFIG_PATH=$CONDA_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH
-          # export CMAKE_PREFIX_PATH=$CONDA_PREFIX:$CMAKE_PREFIX_PATH
-
-          
           conda update -n base -c defaults conda
           conda install -y conda-build anaconda-client
           conda remove -n base conda-anaconda-telemetry
 
           conda build . --python ${{ matrix.python-version }}
 
-          # anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
+          # Only upload on tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
+          fi
