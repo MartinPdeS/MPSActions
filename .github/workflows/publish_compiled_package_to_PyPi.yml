@@ -92,6 +92,11 @@ jobs:
             fetch-depth: 0
             submodules: true
 
+        - name: Get Git Tag
+          run: |
+            git fetch --tags
+            echo "Latest tag: $(git describe --tags --abbrev=0)"
+
         - name: "Setup GNU Fortran"
           if: ${{ inputs.build-macOS }}
           uses: fortran-lang/setup-fortran@v1
