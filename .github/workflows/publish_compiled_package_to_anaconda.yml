@@ -75,7 +75,7 @@ jobs:
 
           conda build . --python ${{ matrix.python-version }}
 
-          # Only upload on tag push
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
-          fi
+          # # Only upload on tag push
+          # if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+          #   anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
+          # fi
