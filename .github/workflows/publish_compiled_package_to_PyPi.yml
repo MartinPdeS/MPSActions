@@ -78,7 +78,7 @@ jobs:
         - uses: maxim-lobanov/setup-xcode@v1
           if: ${{ inputs.build-macOS }}
           with:
-              xcode-version: '15.3'
+              xcode-version: '16.4'
 
         - name: "Install brew packages"
           if: ${{ inputs.build-macOS && inputs.brew-package != ''}}
