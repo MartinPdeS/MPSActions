@@ -50,7 +50,7 @@ jobs:
             fetch-depth: 0
             submodules: true
 
-        - name: "Install brew packages"
+        - name: "Install apt packages"
           if: ${{ inputs.build-Linux && inputs.apt-package != ''}}
           run: |
             sudo apt-get update
