@@ -64,9 +64,6 @@ jobs:
           env:
             CC: "/usr/bin/gcc"
             CXX: "/usr/bin/g++"
-            PYVISTA_OFF_SCREEN: "true"
-            LIBGL_ALWAYS_SOFTWARE: "1"
-            MESA_GL_VERSION_OVERRIDE: "3.3"
 
         - name: "Upload wheel"
           if: ${{ inputs.build-Linux }}
