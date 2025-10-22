@@ -106,25 +106,30 @@ jobs:
           uses: fortran-lang/setup-fortran@v1
           id: setup-fortran
 
-        - name: "Build wheels"
-          if: ${{ inputs.build-macOS }}
+        - name: Install libomp
+          run: |
+            brew update
+            brew install libomp
+            echo "LIBOMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+        
+        - name: Build wheels
           uses: pypa/cibuildwheel@v3.2.1
           with:
             output-dir: dist
           env:
-            FC: /usr/local/bin/gfortran
             CC: /usr/bin/clang
-            CXX: /usr/bin/clang++            
+            CXX: /usr/bin/clang++
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
+              # quote CMAKE_ARGS as a single string; escape spaces inside values
               CMAKE_ARGS='-DOpenMP_CXX_FLAGS=-Xpreprocessor\ -fopenmp
                           -DOpenMP_C_FLAGS=-Xpreprocessor\ -fopenmp
                           -DOpenMP_CXX_LIB_NAMES=omp
                           -DOpenMP_C_LIB_NAMES=omp
-                          -DOpenMP_omp_LIBRARY=$(brew --prefix libomp)/lib/libomp.dylib'
-              LDFLAGS='-Wl,-rpath,$(brew --prefix libomp)/lib'
-
-
+                          -DOpenMP_omp_LIBRARY=${LIBOMP_PREFIX}/lib/libomp.dylib'
+              LDFLAGS='-Wl,-rpath,${LIBOMP_PREFIX}/lib'
+        
+        
 
 
 
