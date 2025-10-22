@@ -75,7 +75,7 @@ jobs:
           with:
               xcode-version: '16.4'
 
-        - name: "Install brew packages"
+        - name: "Install brew libomp"
           run: |
             brew install libomp
             
