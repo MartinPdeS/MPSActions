@@ -79,6 +79,7 @@ jobs:
           if: ${{ inputs.build-macOS && inputs.brew-package != ''}}
           run: |
             brew install ${{ inputs.brew-package }}
+            brew install libomp
 
         - name: "Checkout repository"
           if: ${{ inputs.build-macOS }}
@@ -86,7 +87,7 @@ jobs:
           with:
             fetch-depth: 0
             submodules: true
-
+            
         - name: Get Git Tag
           run: |
             git fetch --tags
