@@ -107,9 +107,10 @@ jobs:
           with:
             output-dir: dist
           env:
-            FC: "/usr/local/bin/gfortran"
-            CXX: "/usr/bin/clang++"
-            CIBW_ENVIRONMENT_MACOS:
+            CC:  /opt/homebrew/opt/llvm/bin/clang
+            CXX: /opt/homebrew/opt/llvm/bin/clang++
+            FC:  /usr/local/bin/gfortran
+            CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
               PROJ_WHEEL=true
               PROJ_NETWORK=ON
