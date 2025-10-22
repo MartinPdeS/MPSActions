@@ -112,13 +112,23 @@ jobs:
           with:
             output-dir: dist
           env:
-            CC:  /opt/homebrew/opt/llvm/bin/clang
-            CXX: /opt/homebrew/opt/llvm/bin/clang++
-            FC:  /usr/local/bin/gfortran
+            FC: /usr/local/bin/gfortran
+            CC: /usr/bin/clang
+            CXX: /usr/bin/clang++            
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
-              PROJ_WHEEL=true
-              PROJ_NETWORK=ON
+              CMAKE_ARGS='-DOpenMP_CXX_FLAGS=-Xpreprocessor\ -fopenmp
+                          -DOpenMP_C_FLAGS=-Xpreprocessor\ -fopenmp
+                          -DOpenMP_CXX_LIB_NAMES=omp
+                          -DOpenMP_C_LIB_NAMES=omp
+                          -DOpenMP_omp_LIBRARY=$(brew --prefix libomp)/lib/libomp.dylib'
+              LDFLAGS='-Wl,-rpath,$(brew --prefix libomp)/lib'
+
+
+
+
+
+              
 
         - name: "Upload wheel"
           if: ${{ inputs.build-macOS }}
