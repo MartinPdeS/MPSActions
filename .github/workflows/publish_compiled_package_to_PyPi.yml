@@ -31,11 +31,6 @@ on:
         required: false
         type: string
         default: ""
-      cibuildwheel_version:
-        required: false
-        type: string
-        default: "v2.20.0"
-          
 
 
 
