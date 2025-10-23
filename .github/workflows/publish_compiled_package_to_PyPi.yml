@@ -121,12 +121,6 @@ jobs:
             CXX: /usr/bin/clang++
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
-              # quote CMAKE_ARGS as a single string; escape spaces inside values
-              CMAKE_ARGS='-DOpenMP_CXX_FLAGS=-Xpreprocessor\ -fopenmp
-                          -DOpenMP_C_FLAGS=-Xpreprocessor\ -fopenmp
-                          -DOpenMP_CXX_LIB_NAMES=omp
-                          -DOpenMP_C_LIB_NAMES=omp
-                          -DOpenMP_omp_LIBRARY=${LIBOMP_PREFIX}/lib/libomp.dylib'
               LDFLAGS='-Wl,-rpath,${LIBOMP_PREFIX}/lib'
 
         - name: "Upload wheel"
