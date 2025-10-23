@@ -121,7 +121,6 @@ jobs:
             CXX: /usr/bin/clang++
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
-              LDFLAGS='-Wl,-rpath,${LIBOMP_PREFIX}/lib'
 
         - name: "Upload wheel"
           if: ${{ inputs.build-macOS }}
