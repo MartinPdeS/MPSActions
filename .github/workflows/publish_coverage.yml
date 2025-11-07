@@ -43,11 +43,19 @@ jobs:
           python -m pip install wheel build
           python -m build --wheel
           python -m pip install .[testing]
-          pytest
 
-      - name: Coverage comment
+
+      - name: Run pytest with coverage
+        run: |
+          # pytest-cov will honor .coveragerc automatically
+          python -m pytest
+          # create XML for the action
+          python -m coverage xml -o coverage.xml
+
+      - name: Post coverage comment
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
+          coverage-file: coverage.xml
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           MINIMUM_GREEN: 90
           MINIMUM_ORANGE: 50
