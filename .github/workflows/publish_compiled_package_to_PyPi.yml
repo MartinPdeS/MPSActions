@@ -75,10 +75,10 @@ jobs:
           with:
               xcode-version: '16.4'
 
-        - name: Install LLVM
-          run: |
-            brew update
-            brew install llvm
+        # - name: Install LLVM
+        #   run: |
+        #     brew update
+        #     brew install llvm
 
         - name: "Install brew libomp"
           run: |
