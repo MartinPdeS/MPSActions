@@ -75,9 +75,13 @@ jobs:
           with:
               xcode-version: '16.4'
 
-        - name: "Install brew libomp"
+        # - name: "Install brew libomp"
+        #   run: |
+        #     brew install libomp
+        - name: Install GCC
           run: |
-            brew install libomp
+            brew update
+            brew install gcc -v
             
         - name: "Install brew packages"
           if: ${{ inputs.build-macOS && inputs.brew-package != ''}}
@@ -101,24 +105,25 @@ jobs:
           uses: fortran-lang/setup-fortran@v1
           id: setup-fortran
 
-        - name: Install libomp
-          run: |
-            brew update
-            brew install libomp
-            echo "LIBOMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+        # - name: Install libomp
+        #   run: |
+        #     brew update
+        #     brew install libomp
+        #     echo "LIBOMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
         
         - name: Build wheels
           uses: pypa/cibuildwheel@v3.2.1
           with:
             output-dir: dist
           env:
-            CC: "/usr/bin/gcc"
-            CXX: "/usr/bin/g++"
             PYVISTA_OFF_SCREEN: "true"
             LIBGL_ALWAYS_SOFTWARE: "1"
             MESA_GL_VERSION_OVERRIDE: "3.3"
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
+            # CC: "/usr/bin/gcc"
+            # CXX: "/usr/bin/g++"
+
             # CC: /usr/bin/clang
             # CXX: /usr/bin/clang++
 
