@@ -75,11 +75,6 @@ jobs:
           with:
               xcode-version: '16.4'
 
-        # - name: Install LLVM
-        #   run: |
-        #     brew update
-        #     brew install llvm
-
         - name: "Install brew libomp"
           run: |
             brew install libomp
@@ -117,10 +112,16 @@ jobs:
           with:
             output-dir: dist
           env:
-            CC: /usr/bin/clang
-            CXX: /usr/bin/clang++
+            CC: "/usr/bin/gcc"
+            CXX: "/usr/bin/g++"
+            PYVISTA_OFF_SCREEN: "true"
+            LIBGL_ALWAYS_SOFTWARE: "1"
+            MESA_GL_VERSION_OVERRIDE: "3.3"
             CIBW_ENVIRONMENT_MACOS: >
               MACOSX_DEPLOYMENT_TARGET=15.0
+            # CC: /usr/bin/clang
+            # CXX: /usr/bin/clang++
+
 
         - name: "Upload wheel"
           if: ${{ inputs.build-macOS }}
