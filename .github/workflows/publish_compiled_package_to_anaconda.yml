@@ -127,6 +127,11 @@ jobs:
       
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate base
+
+          # Fix Windows plugin path issue
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export PATH="$CONDA/Scripts:$PATH"
+          fi
       
           output_file=$(conda build . --python ${{ matrix.python }} --output)
           echo "Built output: $output_file"
