@@ -73,7 +73,6 @@ jobs:
      
       - name: "Setup GNU Fortran"
         id: setup-fortran
-        if: ${{ inputs.build-macOS }}
         uses: fortran-lang/setup-fortran@v1
           
 
