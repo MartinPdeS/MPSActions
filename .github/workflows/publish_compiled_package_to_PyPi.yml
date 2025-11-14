@@ -70,6 +70,12 @@ jobs:
         run: |
           brew update
           brew install gcc
+     
+      - name: "Setup GNU Fortran"
+        id: setup-fortran
+        if: ${{ inputs.build-macOS }}
+        uses: fortran-lang/setup-fortran@v1
+          
 
       - name: Install brew packages
         if: ${{ inputs.brew-package != '' }}
