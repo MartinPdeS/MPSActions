@@ -103,7 +103,7 @@ jobs:
       - name: Install conda build tools
         run: |
           conda install -y conda-build anaconda-client
-          conda remove -y conda-anaconda-telemetry || true
+          conda list conda-anaconda-telemetry && conda remove -y conda-anaconda-telemetry || echo "Telemetry package not installed"
 
       # -------------------------------------------------------------
       # Upload config
