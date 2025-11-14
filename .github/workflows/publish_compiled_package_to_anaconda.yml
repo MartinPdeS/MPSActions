@@ -108,16 +108,32 @@ jobs:
       # -------------------------------------------------------------
       # Upload config
       # -------------------------------------------------------------
+
       - name: Configure conda upload
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "Conda upload enabled"
-            conda config --set anaconda_upload true
-          else
-            echo "Conda upload disabled"
-            conda config --set anaconda_upload false
-          fi
+          conda config --set anaconda_upload true
+          
+      - name: Disable conda upload
+        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          conda config --set anaconda_upload false
+
+
+
+      
+      # - name: Configure conda upload
+      #   shell: bash
+      #   run: |
+      #     if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+      #       echo "Conda upload enabled"
+      #       conda config --set anaconda_upload true
+      #     else
+      #       echo "Conda upload disabled"
+      #       conda config --set anaconda_upload false
+      #     fi
 
       # -------------------------------------------------------------
       # Build and upload package
