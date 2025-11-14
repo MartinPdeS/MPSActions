@@ -108,7 +108,6 @@ jobs:
       # -------------------------------------------------------------
       # Upload config
       # -------------------------------------------------------------
-
       - name: Configure conda upload
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
@@ -146,12 +145,12 @@ jobs:
           output_file=$(conda build . --python ${{ matrix.python }} --output)
           echo "Built output: $output_file"
 
-          # Only upload on tag push
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "Uploading package to Anaconda"
-            anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
-          else
-            echo "Upload skipped since this is not a tag push"
-          fi
+
+      - name: Configure conda upload
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "Uploading package to Anaconda"
+          anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
+
 
           
