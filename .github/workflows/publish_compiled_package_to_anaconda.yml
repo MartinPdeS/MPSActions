@@ -111,13 +111,11 @@ jobs:
 
       - name: Configure conda upload
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        shell: bash
         run: |
           conda config --set anaconda_upload true
           
       - name: Disable conda upload
         if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
-        shell: bash
         run: |
           conda config --set anaconda_upload false
 
