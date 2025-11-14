@@ -86,7 +86,7 @@ jobs:
           auto-activate-base: true
           python-version: ${{ matrix.python }}
           channels: conda-forge, martinpdes, defaults
-          activate-environment: ""
+          activate-environment: true
 
       # -------------------------------------------------------------
       # Debug conda info
