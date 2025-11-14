@@ -3,22 +3,22 @@ name: Build and Upload Conda Package
 on:
   workflow_call:
     inputs:
-      python-versions:
+      python_versions:
         description: "JSON list of Python versions"
         required: true
         type: string
 
-      os-list:
+      os_list:
         description: "JSON list of OS runners such as ['ubuntu-latest','macos-latest']"
         required: true
         type: string
 
-      apt-package:
+      apt_package:
         required: false
         type: string
         default: ""
 
-      brew-package:
+      brew_package:
         required: false
         type: string
         default: ""
@@ -37,8 +37,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(inputs["os-list"]) }}
-        python: ${{ fromJson(inputs["python-versions"]) }}
+        os: ${{ fromJson(inputs["os_list"]) }}
+        python: ${{ fromJson(inputs["python_versions"]) }}
 
     steps:
 
@@ -66,15 +66,15 @@ jobs:
       # Install system packages
       # -------------------------------------------------------------
       - name: Install APT package
-        if: runner.os == 'Linux' && inputs.apt-package != ''
+        if: runner.os == 'Linux' && inputs.apt_package != ''
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ inputs.apt-package }}
+          sudo apt-get install -y ${{ inputs.apt_package }}
 
       - name: Install Homebrew package
-        if: runner.os == 'macOS' && inputs.brew-package != ''
+        if: runner.os == 'macOS' && inputs.brew_package != ''
         run: |
-          brew install ${{ inputs.brew-package }}
+          brew install ${{ inputs.brew_package }}
 
       # -------------------------------------------------------------
       # Set up Conda
