@@ -109,6 +109,7 @@ jobs:
       # Upload config
       # -------------------------------------------------------------
       - name: Configure conda upload
+        shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             echo "Conda upload enabled"
@@ -122,6 +123,7 @@ jobs:
       # Build and upload package
       # -------------------------------------------------------------
       - name: Build and possibly upload package
+        shell: bash
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
@@ -137,3 +139,5 @@ jobs:
           else
             echo "Upload skipped since this is not a tag push"
           fi
+
+          
