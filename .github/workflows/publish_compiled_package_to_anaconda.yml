@@ -4,78 +4,136 @@ on:
   workflow_call:
     inputs:
       python-versions:
+        description: "JSON list of Python versions"
         required: true
         type: string
+
+      os-list:
+        description: "JSON list of OS runners such as ['ubuntu-latest','macos-latest']"
+        required: true
+        type: string
+
       apt-package:
         required: false
         type: string
+        default: ""
+
       brew-package:
         required: false
         type: string
+        default: ""
 
     secrets:
       ANACONDA_API_TOKEN:
         required: true
 
 jobs:
+
   conda_deployment:
-    name: ${{ matrix.os }} -- Python${{ matrix.python-version }}
+    name: Build on ${{ matrix.os }} Python ${{ matrix.python }}
+
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ${{ fromJson(inputs.python-versions) }}
+        os: ${{ fromJson(inputs["os-list"]) }}
+        python: ${{ fromJson(inputs["python-versions"]) }}
 
     steps:
-      - name: Checkout Repository
+
+      # -------------------------------------------------------------
+      # Checkout
+      # -------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: true
           fetch-depth: 0
+          submodules: true
 
-      - name: Install APT Package (Linux)
+      # -------------------------------------------------------------
+      # Debug environment data (very useful)
+      # -------------------------------------------------------------
+      - name: Debug system info
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Matrix OS: ${{ matrix.os }}"
+          echo "Python: ${{ matrix.python }}"
+          uname -a
+          env | sort
+
+      # -------------------------------------------------------------
+      # Install system packages
+      # -------------------------------------------------------------
+      - name: Install APT package
         if: runner.os == 'Linux' && inputs.apt-package != ''
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ inputs.apt-package }}
 
-      - name: Install Homebrew Package (macOS)
+      - name: Install Homebrew package
         if: runner.os == 'macOS' && inputs.brew-package != ''
         run: |
           brew install ${{ inputs.brew-package }}
 
-      - name: Set Up Conda Environment
+      # -------------------------------------------------------------
+      # Set up Conda
+      # -------------------------------------------------------------
+      - name: Install Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniconda-version: 'latest'
+          miniconda-version: "latest"
           auto-activate-base: true
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python }}
           channels: conda-forge, martinpdes, defaults
+          activate-environment: ""
 
-      - name: Install Conda Tools
+      # -------------------------------------------------------------
+      # Debug conda info
+      # -------------------------------------------------------------
+      - name: Debug Conda information
         run: |
-          conda install -y anaconda-client conda-build
+          conda info
+          conda list
+          conda config --show
 
-      - name: Configure Conda Upload
+      # -------------------------------------------------------------
+      # Install conda tools
+      # -------------------------------------------------------------
+      - name: Install conda build tools
+        run: |
+          conda install -y conda-build anaconda-client
+          conda remove -y conda-anaconda-telemetry || true
+
+      # -------------------------------------------------------------
+      # Upload config
+      # -------------------------------------------------------------
+      - name: Configure conda upload
         run: |
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "Conda upload enabled"
             conda config --set anaconda_upload true
           else
+            echo "Conda upload disabled"
             conda config --set anaconda_upload false
           fi
 
-      - name: Build and Upload Conda Package
+      # -------------------------------------------------------------
+      # Build and upload package
+      # -------------------------------------------------------------
+      - name: Build and possibly upload package
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
-          conda update -n base -c defaults conda
-          conda install -y conda-build anaconda-client
-          conda remove -n base conda-anaconda-telemetry
+          echo "Building for Python ${{ matrix.python }}"
 
-          conda build . --python ${{ matrix.python-version }}
+          output_file=$(conda build . --python ${{ matrix.python }} --output)
+          echo "Built output: $output_file"
 
-          # # Only upload on tag push
-          # if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-          #   anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN $(conda build . --python ${{ matrix.python-version }} --output)
-          # fi
+          # Only upload on tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "Uploading package to Anaconda"
+            anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
+          else
+            echo "Upload skipped since this is not a tag push"
+          fi
