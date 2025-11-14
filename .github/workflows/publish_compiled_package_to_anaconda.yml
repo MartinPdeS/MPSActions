@@ -118,6 +118,18 @@ jobs:
         run: |
           conda config --set anaconda_upload false
 
+      - name: Build and possibly upload package
+        shell: bash
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+        run: |
+          echo "Building for Python ${{ matrix.python }}"
+      
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate base
+      
+          output_file=$(conda build . --python ${{ matrix.python }} --output)
+          echo "Built output: $output_file"
 
 
       
@@ -135,14 +147,14 @@ jobs:
       # -------------------------------------------------------------
       # Build and upload package
       # -------------------------------------------------------------
-      - name: Build and possibly upload package
-        env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
-        run: |
-          echo "Building for Python ${{ matrix.python }}"
+      # - name: Build and possibly upload package
+      #   env:
+      #     ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+      #   run: |
+      #     echo "Building for Python ${{ matrix.python }}"
 
-          output_file=$(conda build . --python ${{ matrix.python }} --output)
-          echo "Built output: $output_file"
+      #     output_file=$(conda build . --python ${{ matrix.python }} --output)
+      #     echo "Built output: $output_file"
 
 
       - name: Configure conda upload
