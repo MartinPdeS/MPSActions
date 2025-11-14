@@ -8,203 +8,155 @@ on:
         required: true
         type: string
       build-Linux:
-        required: true
         type: boolean
         default: false
       build-macOS:
-        required: true
         type: boolean
         default: false
       build-Windows:
-        required: true
         type: boolean
         default: false
       brew-package:
-        required: false
         type: string
         default: ""
       apt-package:
-        required: false
         type: string
         default: ""
       mingw-package:
-        required: false
         type: string
         default: ""
 
-
-
 jobs:
-    ManyLinux_x86_64:
-      runs-on: ubuntu-latest
-      steps:            
-        - name: "Checkout repository"
-          if: ${{ inputs.build-Linux }}
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            submodules: true
 
-        - name: "Install apt packages"
-          if: ${{ inputs.build-Linux && inputs.apt-package != ''}}
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y ${{ inputs.apt-package }}
+  linux:
+    if: ${{ inputs.build-Linux }}
+    runs-on: ubuntu-latest
 
-        - name: "Build wheels"
-          if: ${{ inputs.build-Linux }}
-          uses: pypa/cibuildwheel@v3.2.1
-          with:
-            output-dir: dist
-          env:
-            CC: "/usr/bin/gcc"
-            CXX: "/usr/bin/g++"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
 
-        - name: "Upload wheel"
-          if: ${{ inputs.build-Linux }}
-          uses: actions/upload-artifact@v4
-          with:
-            name: "manylinux_wheel_python"
-            path: ./dist/*
+      - name: Install apt packages
+        if: ${{ inputs.apt-package != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-package }}
 
-    macos_x86_64:
-      runs-on: macos-latest
-      steps:            
-        - uses: maxim-lobanov/setup-xcode@v1
-          if: ${{ inputs.build-macOS }}
-          with:
-              xcode-version: '16.4'
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
+        env:
+          CC: gcc
+          CXX: g++
+        with:
+          output-dir: dist
 
-        # - name: "Install brew libomp"
-        #   run: |
-        #     brew install libomp
-        - name: Install GCC
-          run: |
-            brew update
-            brew install gcc -v
-            
-        - name: "Install brew packages"
-          if: ${{ inputs.build-macOS && inputs.brew-package != ''}}
-          run: |
-            brew install ${{ inputs.brew-package }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux_wheels
+          path: dist/*
 
-        - name: "Checkout repository"
-          if: ${{ inputs.build-macOS }}
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            submodules: true
-            
-        - name: Get Git Tag
-          run: |
-            git fetch --tags
-            echo "Latest tag: $(git describe --tags --abbrev=0)"
+  macos:
+    if: ${{ inputs.build-macOS }}
+    runs-on: macos-latest
 
-        - name: "Setup GNU Fortran"
-          if: ${{ inputs.build-macOS }}
-          uses: fortran-lang/setup-fortran@v1
-          id: setup-fortran
+    steps:
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
 
-        # - name: Install libomp
-        #   run: |
-        #     brew update
-        #     brew install libomp
-        #     echo "LIBOMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
-        
-        - name: Build wheels
-          uses: pypa/cibuildwheel@v3.2.1
-          with:
-            output-dir: dist
-          env:
-            PYVISTA_OFF_SCREEN: "true"
-            LIBGL_ALWAYS_SOFTWARE: "1"
-            MESA_GL_VERSION_OVERRIDE: "3.3"
-            CIBW_ENVIRONMENT_MACOS: >
-              MACOSX_DEPLOYMENT_TARGET=15.0
-            # CC: "/usr/bin/gcc"
-            # CXX: "/usr/bin/g++"
+      - name: Install GCC
+        run: |
+          brew update
+          brew install gcc
 
-            # CC: /usr/bin/clang
-            # CXX: /usr/bin/clang++
+      - name: Install brew packages
+        if: ${{ inputs.brew-package != '' }}
+        run: |
+          brew install ${{ inputs.brew-package }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
+        env:
+          PYVISTA_OFF_SCREEN: "true"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "3.3"
+          MACOSX_DEPLOYMENT_TARGET: "15.0"
+        with:
+          output-dir: dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos_wheels
+          path: dist/*
+
+  windows:
+    if: ${{ inputs.build-Windows }}
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: msys2/setup-msys2@v2
+        if: ${{ inputs.mingw-package != '' }}
+        id: msys2
+        with:
+          msystem: MINGW64
+          install: ${{ inputs.mingw-package }}
+          path-type: inherit
+
+      - uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Add MSYS2 to PATH
+        run: |
+          echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $env:GITHUB_PATH
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
+        env:
+          CMAKE_ARGS: "-DPKG_CONFIG_EXECUTABLE=${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
+          CMAKE_GENERATOR: Ninja
+        with:
+          output-dir: dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows_wheels
+          path: dist/*
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - run: |
+          python -m pip install -U pip
+          python -m pip install twine
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Release to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.5.1
+        with:
+          packages_dir: dist/*/
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          verbose: true
 
 
-        - name: "Upload wheel"
-          if: ${{ inputs.build-macOS }}
-          uses: actions/upload-artifact@v4
-          with:
-            name: "macos_x86_64_wheel"
-            path: ./dist/*
-
-    Windows_x86_64:
-      runs-on: windows-latest
-      steps:    
-        - name: "Checkout repository"
-          if: ${{ inputs.build-Windows }}
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-            submodules: true
-
-        - uses: msys2/setup-msys2@v2  # mingw-w64-x86_64-cmake
-          if: ${{ inputs.build-Windows && inputs.mingw-package != ''}}
-          id: msys2
-          with:
-            path-type: inherit
-            msystem: MINGW64
-            install: ${{ inputs.mingw-package }}
-
-        - uses: seanmiddleditch/gha-setup-ninja@master
-          if: ${{ inputs.build-Windows }}
-
-        - name: "Add MSYS2 to PATH"
-          if: ${{ inputs.build-Windows }}
-          run: echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $GITHUB_PATH
-
-        - name: "Build wheels"
-          if: ${{ inputs.build-Windows }}
-          uses: pypa/cibuildwheel@v3.2.1
-          with:
-            output-dir: dist
-          env:
-            CMAKE_ARGS: -DPKG_CONFIG_EXECUTABLE=D:/a/_temp/msys64/mingw64/bin/pkg-config.exe
-            CMAKE_GENERATOR: Ninja
-            CMAKE_MAKE_PROGRAM: ninja
-            # PKG_CONFIG_EXECUTABLE: "D:/a/_temp/msys64/mingw64/bin/pkg-config.exe"
-            # PKG_CONFIG_EXECUTABLE: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
-            # PATH: "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin;${{ env.PATH }}"
-
-        - name: "Upload wheel"
-          if: ${{ inputs.build-Windows }}
-          uses: actions/upload-artifact@v4
-          with:
-            name: "windows_wheel_python"
-            path: ./dist/*
-
-    publish_wheel:
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        needs: [Windows_x86_64, ManyLinux_x86_64, macos_x86_64]
-        runs-on: ubuntu-latest
-        steps:
-          - name: Set-up Python ${{ inputs.python-version }}
-            uses: actions/setup-python@v4
-            with:
-                python-version: "${{ inputs.python-version }}"
-
-          - name: "Install dependencies"
-            shell: bash
-            run: |
-                python -m pip install --upgrade pip
-                python -m pip install twine
-
-          - name: "Download wheels"
-            uses: actions/download-artifact@v4
-            with:
-                path: dist
-
-          - name: "Publish wheels"
-            uses: pypa/gh-action-pypi-publish@v1.5.1
-            with:
-                packages_dir: dist/*/
-                user: __token__
-                password: ${{ secrets.PYPI_API_TOKEN }}
-                verbose: true
