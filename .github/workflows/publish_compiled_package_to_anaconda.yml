@@ -125,15 +125,20 @@ jobs:
         run: |
           echo "Building for Python ${{ matrix.python }}"
       
+          # Activate conda in this shell
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate base
-
-          # Fix Windows plugin path issue
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export PATH="$CONDA/Scripts:$PATH"
-          fi
       
-          output_file=$(conda build . --python ${{ matrix.python }} --output)
+          # Make sure conda-build and anaconda-client are present
+          conda install -y conda-build anaconda-client
+      
+          echo "Conda info:"
+          conda info
+          echo "Conda build package:"
+          conda list conda-build
+      
+          # Use the conda-build command directly instead of "conda build"
+          output_file=$(conda-build . --python ${{ matrix.python }} --output)
           echo "Built output: $output_file"
 
 
