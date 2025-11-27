@@ -139,9 +139,14 @@ jobs:
           echo "Built output: $output_file"
 
       - name: Configure conda upload
+        shell: bash
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
           echo "Uploading package to Anaconda"
+
+          source "$CONDA/etc/profile.d/conda.sh"
           conda activate base
           anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
 
