@@ -148,7 +148,8 @@ jobs:
 
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate base
-          anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
+          anaconda upload --user martinpdes "$output_file"
+          # anaconda upload --user martinpdes --token $ANACONDA_API_TOKEN "$output_file"
 
 
           
