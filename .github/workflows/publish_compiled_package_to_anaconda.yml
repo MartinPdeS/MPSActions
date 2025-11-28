@@ -135,8 +135,16 @@ jobs:
           conda install -y conda-build anaconda-client
       
           # Build the conda package
-          output_file=$(conda-build . --python ${{ matrix.python }} --output)
-          echo "Built output: $output_file"
+          conda-build . --python ${{ matrix.python }}
+          
+          # actual built file (conda or tar.bz2)
+          output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.conda 2>/dev/null || true)
+          
+          if [[ -z "$output_file" ]]; then
+            output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.tar.bz2 2>/dev/null || true)
+          fi
+          
+          echo "Detected built package: $output_file"          
       
           # Upload only on tagged pushes
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
