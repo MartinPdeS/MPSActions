@@ -137,20 +137,20 @@ jobs:
           # Build the conda package
           conda-build . --python ${{ matrix.python }}
           
-          # actual built file (conda or tar.bz2)
-          output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.conda 2>/dev/null || true)
+          # # actual built file (conda or tar.bz2)
+          # output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.conda 2>/dev/null || true)
           
-          if [[ -z "$output_file" ]]; then
-            output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.tar.bz2 2>/dev/null || true)
-          fi
+          # if [[ -z "$output_file" ]]; then
+          #   output_file=$(ls /home/runner/miniconda3/conda-bld/noarch/packlab-*.tar.bz2 2>/dev/null || true)
+          # fi
           
-          echo "Detected built package: $output_file"          
+          # echo "Detected built package: $output_file"          
       
-          # Upload only on tagged pushes
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "Uploading package to Anaconda"
-            # anaconda-client now reads the token from the environment
-            anaconda upload --user martinpdes "$output_file"
-          else
-            echo "Not a tagged push. Skipping upload."
-          fi
+          # # Upload only on tagged pushes
+          # if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+          #   echo "Uploading package to Anaconda"
+          #   # anaconda-client now reads the token from the environment
+          #   anaconda upload --user martinpdes "$output_file"
+          # else
+          #   echo "Not a tagged push. Skipping upload."
+          # fi
