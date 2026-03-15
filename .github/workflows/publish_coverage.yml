@@ -59,7 +59,6 @@ jobs:
       - name: Post coverage comment
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
-          coverage-file: coverage.xml
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           MINIMUM_GREEN: 90
           MINIMUM_ORANGE: 50
