@@ -46,10 +46,22 @@ jobs:
       
       - name: Build wheel and install it with test dependencies
         run: |
-          python -m pip install wheel build
+          python -m pip install --upgrade pip wheel build
           python -m build --wheel
-          python -m pip install dist/*.whl
+          python -m pip install --force-reinstall dist/*.whl
           python -m pip install pytest pytest-cov coverage
+
+      - name: Debug import resolution
+        run: |
+          python -c "import os, sys; print('cwd =', os.getcwd()); print('sys.path[0] =', sys.path[0])"
+          python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
+
+      - name: Run pytest with coverage
+        run: |
+          cd /tmp
+          python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
+          python -m pytest /home/runner/work/PyMieSim/PyMieSim/tests --config-file=/home/runner/work/PyMieSim/PyMieSim/pytest.ini
+          python -m coverage xml -o /home/runner/work/PyMieSim/PyMieSim/coverage.xml
 
 
       - name: Run pytest with coverage
