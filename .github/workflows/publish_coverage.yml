@@ -55,12 +55,12 @@ jobs:
         run: |
           python -c "import os, sys; print('cwd =', os.getcwd()); print('sys.path[0] =', sys.path[0])"
           python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
-
+      
       - name: Run pytest with coverage
         run: |
           cd /tmp
           python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
-          python -m pytest /home/runner/work/PyMieSim/PyMieSim/tests --config-file=/home/runner/work/PyMieSim/PyMieSim/pytest.ini
+          python -m pytest --import-mode=importlib /home/runner/work/PyMieSim/PyMieSim/tests --config-file=/home/runner/work/PyMieSim/PyMieSim/pytest.ini
           python -m coverage xml -o /home/runner/work/PyMieSim/PyMieSim/coverage.xml
 
 
