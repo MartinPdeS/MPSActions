@@ -48,7 +48,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd /tmp
-          python -m pytest --import-mode=importlib "${{ github.workspace }}/tests" --config-file="${{ github.workspace }}/pytest.ini"
+          python -m pytest --import-mode=importlib --cov=PyMieSim --cov-config="${{ github.workspace }}/.coveragerc" "${{ github.workspace }}/tests" --config-file="${{ github.workspace }}/pytest.ini"
           python -m coverage xml -o "${{ github.workspace }}/coverage.xml"
 
       - name: Post coverage comment
