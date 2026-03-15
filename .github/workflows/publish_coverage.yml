@@ -37,13 +37,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
-
-      # - name: Install everything, run the tests, produce the .coverage file
-      #   run: |
-      #     python -m pip install wheel build
-      #     python -m build --wheel
-      #     python -m pip install .[testing]
-      
+    
       - name: Build wheel and install it with test dependencies
         run: |
           python -m pip install --upgrade pip wheel build
@@ -69,3 +63,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           MINIMUM_GREEN: 90
           MINIMUM_ORANGE: 50
+          COVERAGE_PATH: .
