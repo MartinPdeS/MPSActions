@@ -44,11 +44,6 @@ jobs:
           python -m build --wheel
           python -m pip install --force-reinstall dist/*.whl
           python -m pip install pytest pytest-cov coverage
-
-      - name: Debug import resolution
-        run: |
-          python -c "import os, sys; print('cwd =', os.getcwd()); print('sys.path[0] =', sys.path[0])"
-          python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
       
       - name: Run pytest with coverage
         run: |
