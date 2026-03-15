@@ -59,17 +59,8 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd /tmp
-          python -c "import PyMieSim; print('PyMieSim =', PyMieSim.__file__)"
-          python -m pytest --import-mode=importlib /home/runner/work/PyMieSim/PyMieSim/tests --config-file=/home/runner/work/PyMieSim/PyMieSim/pytest.ini
-          python -m coverage xml -o /home/runner/work/PyMieSim/PyMieSim/coverage.xml
-
-
-      - name: Run pytest with coverage
-        run: |
-          # pytest-cov will honor .coveragerc automatically
-          python -m pytest
-          # create XML for the action
-          python -m coverage xml -o coverage.xml
+          python -m pytest --import-mode=importlib "${{ github.workspace }}/tests" --config-file="${{ github.workspace }}/pytest.ini"
+          python -m coverage xml -o "${{ github.workspace }}/coverage.xml"
 
       - name: Post coverage comment
         uses: py-cov-action/python-coverage-comment-action@v3
