@@ -48,9 +48,14 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd /tmp
-          COVERAGE_FILE="${{ github.workspace }}/.coverage" \
-          python -m pytest --import-mode=importlib --cov=PyMieSim --cov-config="${{ github.workspace }}/.coveragerc" "${{ github.workspace }}/tests" --config-file="${{ github.workspace }}/pytest.ini"
-          python -m coverage xml -o "${{ github.workspace }}/coverage.xml"
+          COVERAGE_FILE="${{ github.workspace }}/.coverage" python -m pytest \
+            --import-mode=importlib \
+            --cov=PyMieSim \
+            --cov-config="${{ github.workspace }}/.coveragerc" \
+            --cov-report=term-missing \
+            --cov-report=xml:${{ github.workspace }}/coverage.xml \
+            "${{ github.workspace }}/tests" \
+            --config-file="${{ github.workspace }}/pytest.ini"
 
       - name: Post coverage comment
         uses: py-cov-action/python-coverage-comment-action@v3
