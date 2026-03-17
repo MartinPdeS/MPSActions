@@ -141,17 +141,26 @@ jobs:
 
       - name: Verify documentation tree
         run: |
+          echo "===== tag ====="
+          echo "${{ env.tag }}"
+          echo
+          echo "===== docs index files ====="
+          find docs -maxdepth 3 -name index.html | sort
+          echo
           test -f index.html
           test -f version_switcher.json
           test -f "docs/${{ env.tag }}/index.html"
           test -f docs/latest/index.html
-          find docs -maxdepth 3 -name index.html | sort
 
       - name: Commit and push documentation branch
         run: |
           git add index.html
           git add version_switcher.json
           git add docs/
+
+          echo "===== staged files ====="
+          git status --short
+          echo
 
           if git diff --cached --quiet; then
             echo "No documentation changes to commit."
@@ -183,7 +192,16 @@ jobs:
           test -f "/tmp/pages_site/docs/${{ env.tag }}/index.html"
           test -f /tmp/pages_site/docs/latest/index.html
 
+      - name: Debug Pages payload
+        run: |
+          echo "===== payload version_switcher.json ====="
+          cat /tmp/pages_site/version_switcher.json
+          echo
+          echo "===== payload index files ====="
           find /tmp/pages_site -maxdepth 4 -name index.html | sort
+          echo
+          echo "===== payload files ====="
+          find /tmp/pages_site -maxdepth 3 -type f | sort
 
       - name: Set up GitHub Pages
         uses: actions/configure-pages@v5
@@ -196,3 +214,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Probe live site after deploy
+        run: |
+          sleep 20
+          echo "===== live version_switcher.json ====="
+          curl -L https://martinpdes.github.io/${{ inputs.package-name }}/version_switcher.json || true
+          echo
+          echo "===== live latest ====="
+          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/latest/ || true
+          echo
+          echo "===== live tag ====="
+          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/${{ env.tag }}/ || true
+          echo
+          echo "===== live tag index ====="
+          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/${{ env.tag }}/index.html || true
