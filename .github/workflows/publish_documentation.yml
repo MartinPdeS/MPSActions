@@ -14,7 +14,7 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: documentation-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,24 +31,24 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install headless server dependencies
-        run: |
-          sudo apt-get update
-          if [ -n "${{ inputs.apt-package }}" ]; then
-            sudo apt-get install -y ${{ inputs.apt-package }}
-          fi
-
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
           ref: master
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install headless dependencies
+        run: |
+          sudo apt-get update
+          if [ -n "${{ inputs.apt-package }}" ]; then
+            sudo apt-get install -y ${{ inputs.apt-package }}
+          fi
 
       - name: Build package and install documentation dependencies
         run: |
@@ -76,8 +76,8 @@ jobs:
 
       - name: Set up Git user
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Download and render landing page template
         run: |
@@ -88,6 +88,7 @@ jobs:
       - name: Update versioned documentation
         run: |
           mkdir -p docs
+
           rm -rf "docs/${{ env.tag }}"
           rm -rf docs/latest
 
@@ -146,13 +147,79 @@ jobs:
           test -f docs/latest/index.html
           find docs -maxdepth 3 -name index.html | sort
 
+      - name: Sync with remote documentation branch
+        run: |
+          git fetch origin documentation_page
+          git reset --hard origin/documentation_page
+
+      - name: Reapply generated documentation content
+        run: |
+          curl -L -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
+          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > index.html
+          rm -f template_index.html
+
+          rm -rf "docs/${{ env.tag }}"
+          rm -rf docs/latest
+
+          cp -r "/tmp/documentation_build" "docs/${{ env.tag }}"
+          cp -r "docs/${{ env.tag }}" docs/latest
+
+          json_file="version_switcher.json"
+          docs_path="docs"
+          base_url="https://martinpdes.github.io/${{ inputs.package-name }}"
+
+          rm -f "$json_file"
+          echo "[" > "$json_file"
+
+          first_entry=true
+
+          if [ -d "$docs_path/latest" ]; then
+            latest_url="${base_url}/${docs_path}/latest"
+            jq -n \
+              --arg name "latest" \
+              --arg version "latest" \
+              --arg url "$latest_url" \
+              '{name: $name, version: $version, url: $url}' >> "$json_file"
+            first_entry=false
+          fi
+
+          version_dirs=$(find "$docs_path" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v "^latest$" | sort -V -r)
+
+          for version in $version_dirs; do
+            version_url="${base_url}/${docs_path}/${version}"
+
+            if [ "$first_entry" = false ]; then
+              echo "," >> "$json_file"
+            fi
+
+            jq -n \
+              --arg name "$version" \
+              --arg version "$version" \
+              --arg url "$version_url" \
+              '{name: $name, version: $version, url: $url}' >> "$json_file"
+
+            first_entry=false
+          done
+
+          echo "]" >> "$json_file"
+
+          test -f index.html
+          test -f version_switcher.json
+          test -f "docs/${{ env.tag }}/index.html"
+          test -f docs/latest/index.html
+
       - name: Commit and push documentation branch
         run: |
           git add index.html
           git add version_switcher.json
           git add docs/
-          git commit --allow-empty -m "Update documentation for ${{ env.tag }}"
-          git push origin HEAD:documentation_page
+
+          if git diff --cached --quiet; then
+            echo "No documentation changes to commit."
+          else
+            git commit -m "Update documentation for ${{ env.tag }} [skip ci]"
+            git push origin HEAD:documentation_page
+          fi
 
       - name: Prepare Pages payload
         run: |
@@ -161,17 +228,21 @@ jobs:
 
           cp index.html /tmp/pages_site/
           cp version_switcher.json /tmp/pages_site/
+
           if [ -f .nojekyll ]; then
             cp .nojekyll /tmp/pages_site/
+          else
+            touch /tmp/pages_site/.nojekyll
           fi
+
           cp -r docs /tmp/pages_site/
 
           test -f /tmp/pages_site/index.html
           test -f /tmp/pages_site/version_switcher.json
+          test -f /tmp/pages_site/.nojekyll
           test -f "/tmp/pages_site/docs/${{ env.tag }}/index.html"
           test -f /tmp/pages_site/docs/latest/index.html
 
-          echo "Pages payload index files:"
           find /tmp/pages_site -maxdepth 4 -name index.html | sort
 
       - name: Set up GitHub Pages
