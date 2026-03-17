@@ -17,53 +17,58 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-
 jobs:
   deploy_documentation:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: "Set-up: Python"
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: "Install: Dependencies for headless server"
+      - name: Install headless server dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ inputs.apt-package }}
+          if [ -n "${{ inputs.apt-package }}" ]; then
+            sudo apt-get install -y ${{ inputs.apt-package }}
+          fi
 
-      - name: "Checkout requirements and files for testing"
+      - name: Checkout source branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
           ref: master
 
-      - name: Install everything, run the tests, produce the .coverage file
+      - name: Build package and install documentation dependencies
         run: |
-          python -m pip install wheel build
+          python -m pip install --upgrade pip wheel build
           python -m build --wheel
           python -m pip install .[documentation]
 
       - name: Get current tag
-        id: get-tag
         run: |
-          # Use git describe to find the latest tag
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0.0")
-
-          # Output the tag to the environment
-          echo "tag=$TAG" >> $GITHUB_ENV
+          echo "tag=$TAG" >> "$GITHUB_ENV"
           echo "Tag found or default: $TAG"
 
-      - name: "Sphinx build"
+      - name: Build Sphinx documentation
         run: |
+          rm -rf /tmp/documentation_build
           sphinx-build --verbose -b html docs/source /tmp/documentation_build
+          test -f /tmp/documentation_build/index.html
 
-      - name: Checkout Pages Branch
+      - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -74,79 +79,108 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Download and process template_index.html
+      - name: Download and render landing page template
         run: |
-          # Download the template_index.html
-          curl -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
+          curl -L -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
+          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > index.html
+          rm -f template_index.html
 
-          # Replace <package> with the provided package name and save to the docs directory
-          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > ./index.html
-          rm -rf template_index.html
-
-      - name: Update new documentation version
+      - name: Update versioned documentation
         run: |
-          rm -rf docs/${{ env.tag }}
+          mkdir -p docs
+          rm -rf "docs/${{ env.tag }}"
           rm -rf docs/latest
-          mv /tmp/documentation_build docs/${{ env.tag }}
-          cp -r docs/${{ env.tag }} docs/latest
 
-      - name: Scan, sort versions, and update version_switcher.json
+          mv /tmp/documentation_build "docs/${{ env.tag }}"
+          cp -r "docs/${{ env.tag }}" docs/latest
+
+          test -f "docs/${{ env.tag }}/index.html"
+          test -f "docs/latest/index.html"
+
+      - name: Rebuild version_switcher.json
         run: |
-          # Define the path to version_switcher.json
           json_file="version_switcher.json"
-          rm -f $json_file
           docs_path="docs"
           base_url="https://martinpdes.github.io/${{ inputs.package-name }}"
 
-          # Start the JSON array
-          echo "[" > $json_file
+          rm -f "$json_file"
+          echo "[" > "$json_file"
 
-          # Handle the "latest" version explicitly
+          first_entry=true
+
           if [ -d "$docs_path/latest" ]; then
             latest_url="${base_url}/${docs_path}/latest"
             jq -n \
               --arg name "latest" \
               --arg version "latest" \
               --arg url "$latest_url" \
-              '{name: $name, version: $version, url: $url}' >> $json_file
+              '{name: $name, version: $version, url: $url}' >> "$json_file"
+            first_entry=false
           fi
 
-          # Get sorted version directories in descending order excluding "latest"
-          version_dirs=$(ls -v $docs_path | grep -v "^latest$" | sort -V -r)
+          version_dirs=$(find "$docs_path" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v "^latest$" | sort -V -r)
 
-          # Loop over sorted versions and add to JSON file
           for version in $version_dirs; do
             version_url="${base_url}/${docs_path}/${version}"
 
-            # Add a comma after "latest" or previous entry
-            echo "," >> $json_file
+            if [ "$first_entry" = false ]; then
+              echo "," >> "$json_file"
+            fi
 
-            # Append each version as a JSON entry
             jq -n \
               --arg name "$version" \
               --arg version "$version" \
               --arg url "$version_url" \
-              '{name: $name, version: $version, url: $url}' >> $json_file
+              '{name: $name, version: $version, url: $url}' >> "$json_file"
+
+            first_entry=false
           done
 
-          # End the JSON array
-          echo "]" >> $json_file
+          echo "]" >> "$json_file"
 
-          # Add and commit the updated version_switcher.json
-          git add $json_file
-          echo $json_file
+      - name: Verify documentation tree
+        run: |
+          test -f index.html
+          test -f version_switcher.json
+          test -f "docs/${{ env.tag }}/index.html"
+          test -f docs/latest/index.html
+          find docs -maxdepth 3 -name index.html | sort
+
+      - name: Commit and push documentation branch
+        run: |
           git add index.html
+          git add version_switcher.json
           git add docs/
-          git commit --allow-empty -m "Update version_switcher.json"
-          git push origin HEAD
+          git commit --allow-empty -m "Update documentation for ${{ env.tag }}"
+          git push origin HEAD:documentation_page
 
-      - name: Setup Pages
+      - name: Prepare Pages payload
+        run: |
+          rm -rf /tmp/pages_site
+          mkdir -p /tmp/pages_site
+
+          cp index.html /tmp/pages_site/
+          cp version_switcher.json /tmp/pages_site/
+          if [ -f .nojekyll ]; then
+            cp .nojekyll /tmp/pages_site/
+          fi
+          cp -r docs /tmp/pages_site/
+
+          test -f /tmp/pages_site/index.html
+          test -f /tmp/pages_site/version_switcher.json
+          test -f "/tmp/pages_site/docs/${{ env.tag }}/index.html"
+          test -f /tmp/pages_site/docs/latest/index.html
+
+          echo "Pages payload index files:"
+          find /tmp/pages_site -maxdepth 4 -name index.html | sort
+
+      - name: Set up GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          path: '.'
+          path: /tmp/pages_site
 
       - name: Deploy to GitHub Pages
         id: deployment
