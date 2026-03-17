@@ -92,7 +92,7 @@ jobs:
           rm -rf "docs/${{ env.tag }}"
           rm -rf docs/latest
 
-          mv /tmp/documentation_build "docs/${{ env.tag }}"
+          cp -r /tmp/documentation_build "docs/${{ env.tag }}"
           cp -r "docs/${{ env.tag }}" docs/latest
 
           test -f "docs/${{ env.tag }}/index.html"
@@ -147,67 +147,6 @@ jobs:
           test -f docs/latest/index.html
           find docs -maxdepth 3 -name index.html | sort
 
-      - name: Sync with remote documentation branch
-        run: |
-          git fetch origin documentation_page
-          git reset --hard origin/documentation_page
-
-      - name: Reapply generated documentation content
-        run: |
-          curl -L -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
-          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > index.html
-          rm -f template_index.html
-
-          rm -rf "docs/${{ env.tag }}"
-          rm -rf docs/latest
-
-          cp -r "/tmp/documentation_build" "docs/${{ env.tag }}"
-          cp -r "docs/${{ env.tag }}" docs/latest
-
-          json_file="version_switcher.json"
-          docs_path="docs"
-          base_url="https://martinpdes.github.io/${{ inputs.package-name }}"
-
-          rm -f "$json_file"
-          echo "[" > "$json_file"
-
-          first_entry=true
-
-          if [ -d "$docs_path/latest" ]; then
-            latest_url="${base_url}/${docs_path}/latest"
-            jq -n \
-              --arg name "latest" \
-              --arg version "latest" \
-              --arg url "$latest_url" \
-              '{name: $name, version: $version, url: $url}' >> "$json_file"
-            first_entry=false
-          fi
-
-          version_dirs=$(find "$docs_path" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v "^latest$" | sort -V -r)
-
-          for version in $version_dirs; do
-            version_url="${base_url}/${docs_path}/${version}"
-
-            if [ "$first_entry" = false ]; then
-              echo "," >> "$json_file"
-            fi
-
-            jq -n \
-              --arg name "$version" \
-              --arg version "$version" \
-              --arg url "$version_url" \
-              '{name: $name, version: $version, url: $url}' >> "$json_file"
-
-            first_entry=false
-          done
-
-          echo "]" >> "$json_file"
-
-          test -f index.html
-          test -f version_switcher.json
-          test -f "docs/${{ env.tag }}/index.html"
-          test -f docs/latest/index.html
-
       - name: Commit and push documentation branch
         run: |
           git add index.html
@@ -218,6 +157,7 @@ jobs:
             echo "No documentation changes to commit."
           else
             git commit -m "Update documentation for ${{ env.tag }} [skip ci]"
+            git pull --rebase origin documentation_page
             git push origin HEAD:documentation_page
           fi
 
