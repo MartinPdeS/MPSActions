@@ -229,3 +229,7 @@ jobs:
           echo
           echo "===== live tag index ====="
           curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/${{ env.tag }}/index.html || true
+
+      - name: Print deployment URL
+        run: |
+          echo "page_url=${{ steps.deployment.outputs.page_url }}"
