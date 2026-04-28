@@ -205,10 +205,6 @@ jobs:
             echo "No pyproject.toml found."
           fi
 
-          echo ""
-          echo "Rendered recipe:"
-          conda conda-render . --python "${PYTHON_VERSION}" -c martinpdes -c conda-forge
-
       # -------------------------------------------------------------
       # Debug expected package path
       # -------------------------------------------------------------
