@@ -207,10 +207,7 @@ jobs:
 
           echo ""
           echo "Rendered recipe:"
-          conda render . \
-            --python "${PYTHON_VERSION}" \
-            -c martinpdes \
-            -c conda-forge
+          conda conda-render . --python "${PYTHON_VERSION}" -c martinpdes -c conda-forge
 
       # -------------------------------------------------------------
       # Debug expected package path
