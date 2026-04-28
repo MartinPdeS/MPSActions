@@ -71,10 +71,14 @@ jobs:
           echo "GitHub event: $GITHUB_EVENT_NAME"
           echo "Workspace: $GITHUB_WORKSPACE"
           echo "Conda path before setup: ${CONDA:-not-set}"
+
           uname -a || true
           git --version
           git status --short
           git describe --tags --always --dirty || true
+
+          echo ""
+          echo "Environment variables:"
           env | sort
 
       # -------------------------------------------------------------
@@ -94,16 +98,19 @@ jobs:
 
       # -------------------------------------------------------------
       # Set up Conda
+      #
+      # Use Miniforge instead of Miniconda latest.
+      # This avoids the current Miniconda latest installer/bootstrap issue.
       # -------------------------------------------------------------
-      - name: Install Miniconda
+      - name: Install Miniforge
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniconda-version: "latest"
+          miniforge-version: "latest"
           auto-update-conda: false
           auto-activate-base: true
           activate-environment: base
           python-version: ${{ matrix.python }}
-          channels: conda-forge,martinpdes,defaults
+          channels: conda-forge,martinpdes
           channel-priority: flexible
           show-channel-urls: true
 
@@ -115,20 +122,32 @@ jobs:
           echo "CONDA=$CONDA"
           echo "CONDA_PREFIX=$CONDA_PREFIX"
           echo "CONDA_DEFAULT_ENV=$CONDA_DEFAULT_ENV"
-          echo "CONDA_NO_PLUGINS=$CONDA_NO_PLUGINS"
+          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+
           which conda
           conda --version
           conda info
           conda config --show-sources
           conda config --show
           conda list
+
+          echo ""
+          echo "Search conda-build:"
           conda search conda-build --info || true
+
+          echo ""
+          echo "Search anaconda-client:"
           conda search anaconda-client --info || true
 
       # -------------------------------------------------------------
       # Install conda build tools
+      #
+      # CONDA_NO_PLUGINS is scoped only to this step.
+      # Do not set it globally before setup-miniconda.
       # -------------------------------------------------------------
       - name: Install conda build tools
+        env:
+          CONDA_NO_PLUGINS: "true"
         run: |
           conda install -n base -y \
             -c conda-forge \
@@ -140,43 +159,76 @@ jobs:
       # -------------------------------------------------------------
       - name: Debug Conda after tool installation
         run: |
+          echo "CONDA=$CONDA"
+          echo "CONDA_PREFIX=$CONDA_PREFIX"
+          echo "CONDA_DEFAULT_ENV=$CONDA_DEFAULT_ENV"
+
+          which conda
           which conda-build
           which anaconda
+
+          conda --version
           conda-build --version
           anaconda --version
+
+          conda list conda
           conda list conda-build
           conda list anaconda-client
-          conda list conda
           conda info
 
       # -------------------------------------------------------------
       # Debug recipe metadata
       # -------------------------------------------------------------
       - name: Debug recipe metadata
+        env:
+          CONDA_NO_PLUGINS: "true"
         run: |
           echo "Repository files:"
           ls -la
 
+          echo ""
           echo "meta.yaml:"
           if [ -f meta.yaml ]; then
-            sed -n '1,220p' meta.yaml
+            sed -n '1,260p' meta.yaml
           else
             echo "No meta.yaml found at repository root."
           fi
 
+          echo ""
           echo "conda_build_config.yaml:"
           if [ -f conda_build_config.yaml ]; then
-            sed -n '1,220p' conda_build_config.yaml
+            sed -n '1,260p' conda_build_config.yaml
           else
             echo "No conda_build_config.yaml found."
           fi
 
+          echo ""
+          echo "pyproject.toml:"
+          if [ -f pyproject.toml ]; then
+            sed -n '1,260p' pyproject.toml
+          else
+            echo "No pyproject.toml found."
+          fi
+
+          echo ""
           echo "Rendered recipe:"
           conda render . \
             --python "${PYTHON_VERSION}" \
             -c martinpdes \
+            -c conda-forge
+
+      # -------------------------------------------------------------
+      # Debug expected package path
+      # -------------------------------------------------------------
+      - name: Debug expected conda build output
+        env:
+          CONDA_NO_PLUGINS: "true"
+        run: |
+          conda-build . \
+            --python "${PYTHON_VERSION}" \
+            -c martinpdes \
             -c conda-forge \
-            -c defaults
+            --output
 
       # -------------------------------------------------------------
       # Configure upload behavior
@@ -191,18 +243,23 @@ jobs:
             conda config --set anaconda_upload false
           fi
 
+          conda config --show anaconda_upload
+
       # -------------------------------------------------------------
       # Build package
       # -------------------------------------------------------------
       - name: Build conda package
+        env:
+          CONDA_NO_PLUGINS: "true"
         run: |
           echo "Building conda package for Python ${PYTHON_VERSION}"
+
+          mkdir -p conda-build-artifacts
 
           conda-build . \
             --python "${PYTHON_VERSION}" \
             -c martinpdes \
             -c conda-forge \
-            -c defaults \
             --output-folder conda-build-artifacts
 
       # -------------------------------------------------------------
@@ -212,9 +269,10 @@ jobs:
         if: always()
         run: |
           echo "Build artifacts:"
-          find conda-build-artifacts -type f -maxdepth 5 -print || true
+          find conda-build-artifacts -maxdepth 6 -type f -print || true
 
-          echo "Conda build cache:"
+          echo ""
+          echo "Conda build cache information:"
           conda-build purge --help >/dev/null 2>&1 || true
 
       # -------------------------------------------------------------
@@ -225,13 +283,24 @@ jobs:
         run: |
           echo "Uploading conda packages to Anaconda."
 
+          shopt -s globstar nullglob
+
+          packages=(
+            conda-build-artifacts/**/*.conda
+            conda-build-artifacts/**/*.tar.bz2
+          )
+
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "No conda packages found to upload."
+            exit 1
+          fi
+
           anaconda \
             --token "$ANACONDA_API_TOKEN" \
             upload \
             --user martinpdes \
             --force \
-            conda-build-artifacts/**/*.conda \
-            conda-build-artifacts/**/*.tar.bz2
+            "${packages[@]}"
 
       # -------------------------------------------------------------
       # Store package as GitHub Actions artifact
