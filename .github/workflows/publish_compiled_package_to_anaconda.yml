@@ -45,7 +45,6 @@ jobs:
         python: ${{ fromJson(inputs.python_versions) }}
 
     env:
-      CONDA_NO_PLUGINS: "true"
       PYTHON_VERSION: ${{ matrix.python }}
       ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
 
