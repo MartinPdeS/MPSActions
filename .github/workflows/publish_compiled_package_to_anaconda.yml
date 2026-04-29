@@ -152,6 +152,7 @@ jobs:
           echo
           echo "===== installed APT package versions ====="
           for package_name in ${APT_PACKAGE}; do
+            echo "----- ${package_name} -----"
             dpkg -s "${package_name}" 2>/dev/null | sed -n '1,40p' || true
             echo
           done
@@ -228,6 +229,10 @@ jobs:
           conda list
           echo
 
+          echo "===== available conda commands before conda-build install ====="
+          conda commands || true
+          echo
+
           echo "===== search conda-build ====="
           conda search conda-build --info || true
           echo
@@ -267,6 +272,10 @@ jobs:
           conda list python
           echo
 
+          echo "===== available conda commands after conda-build install ====="
+          conda commands || true
+          echo
+
           echo "===== conda info ====="
           conda info
           echo
@@ -286,7 +295,7 @@ jobs:
 
           echo "===== meta.yaml ====="
           if [ -f meta.yaml ]; then
-            sed -n '1,320p' meta.yaml
+            sed -n '1,360p' meta.yaml
           else
             echo "No meta.yaml found at repository root."
           fi
@@ -294,7 +303,7 @@ jobs:
 
           echo "===== conda_build_config.yaml ====="
           if [ -f conda_build_config.yaml ]; then
-            sed -n '1,320p' conda_build_config.yaml
+            sed -n '1,360p' conda_build_config.yaml
           else
             echo "No conda_build_config.yaml found."
           fi
@@ -302,7 +311,7 @@ jobs:
 
           echo "===== pyproject.toml ====="
           if [ -f pyproject.toml ]; then
-            sed -n '1,320p' pyproject.toml
+            sed -n '1,360p' pyproject.toml
           else
             echo "No pyproject.toml found."
           fi
@@ -310,7 +319,7 @@ jobs:
 
           echo "===== setup.cfg ====="
           if [ -f setup.cfg ]; then
-            sed -n '1,220p' setup.cfg
+            sed -n '1,260p' setup.cfg
           else
             echo "No setup.cfg found."
           fi
@@ -318,16 +327,39 @@ jobs:
 
           echo "===== setup.py ====="
           if [ -f setup.py ]; then
-            sed -n '1,220p' setup.py
+            sed -n '1,260p' setup.py
           else
             echo "No setup.py found."
           fi
+          echo
+
+          echo "===== recipe related files ====="
+          find . \
+            -maxdepth 3 \
+            -type f \
+            \( -name "meta.yaml" -o -name "conda_build_config.yaml" -o -name "build.sh" -o -name "bld.bat" \) \
+            -print \
+            | sort
 
       - name: Render conda recipe
-        env:
-          CONDA_NO_PLUGINS: "true"
         run: |
           set -Eeuo pipefail
+
+          echo "===== render environment ====="
+          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+          echo "PYTHON_VERSION=${PYTHON_VERSION}"
+          echo
+
+          echo "===== executables ====="
+          which conda
+          which conda-build
+          conda --version
+          conda-build --version
+          echo
+
+          echo "===== available conda commands ====="
+          conda commands || true
+          echo
 
           echo "===== conda render ====="
           conda render . \
@@ -349,6 +381,16 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          echo "===== expected build output environment ====="
+          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+          echo "PYTHON_VERSION=${PYTHON_VERSION}"
+          echo
+
+          echo "===== executables ====="
+          which conda-build
+          conda-build --version
+          echo
+
           echo "===== expected conda build output path ====="
           conda-build . \
             --python "${PYTHON_VERSION}" \
@@ -363,6 +405,7 @@ jobs:
           echo "===== upload decision ====="
           echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
           echo "GITHUB_REF=${GITHUB_REF}"
+          echo
 
           if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "This is a tag push. Conda upload is enabled."
@@ -386,6 +429,12 @@ jobs:
           echo "PYTHON_VERSION=${PYTHON_VERSION}"
           echo "CONDA_BUILD_OUTPUT_DIRECTORY=${CONDA_BUILD_OUTPUT_DIRECTORY}"
           echo "RUNNER_OS=${RUNNER_OS}"
+          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+          echo
+
+          echo "===== executables ====="
+          which conda-build
+          conda-build --version
           echo
 
           rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
@@ -440,7 +489,7 @@ jobs:
             | sort || true
           echo
 
-          echo "===== conda build cache help available ====="
+          echo "===== conda-build purge command availability ====="
           conda-build purge --help >/dev/null 2>&1 || true
 
       - name: Collect conda packages for upload
@@ -474,10 +523,19 @@ jobs:
           echo "===== package metadata ====="
           while IFS= read -r package_path; do
             [ -n "${package_path}" ] || continue
+
             echo "----- ${package_path} -----"
             ls -lh "${package_path}"
+
             echo "sha256:"
-            shasum -a 256 "${package_path}" || sha256sum "${package_path}" || true
+            if command -v shasum >/dev/null 2>&1; then
+              shasum -a 256 "${package_path}"
+            elif command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "${package_path}"
+            else
+              echo "No sha256 command available."
+            fi
+
             echo
           done < "${PACKAGE_LIST_FILE}"
 
@@ -511,18 +569,19 @@ jobs:
           cat "${PACKAGE_LIST_FILE}"
           echo
 
-          echo "Anaconda client:"
+          echo "===== Anaconda client ====="
           which anaconda
           anaconda --version
           echo
 
-          echo "Running upload."
+          echo "===== upload starts ====="
 
           while IFS= read -r package_path; do
             [ -n "${package_path}" ] || continue
 
             echo
-            echo "===== uploading ${package_path} ====="
+            echo "Uploading package:"
+            echo "${package_path}"
 
             anaconda \
               --token "${ANACONDA_API_TOKEN}" \
