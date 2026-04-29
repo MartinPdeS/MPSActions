@@ -6,16 +6,33 @@ on:
       python-version:
         required: true
         type: string
+
       package-name:
         required: true
         type: string
+
       apt-package:
         required: false
         type: string
+        default: ""
+
+      source-ref:
+        required: false
+        type: string
+        default: "master"
+
+      fail-on-sphinx-warning:
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
-  group: documentation-pages-${{ github.ref }}
+  group: documentation-pages-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   deploy_documentation:
@@ -30,178 +47,712 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
+    env:
+      SOURCE_REF: ${{ inputs.source-ref }}
+      PACKAGE_NAME: ${{ inputs.package-name }}
+      PYTHON_VERSION: ${{ inputs.python-version }}
+      APT_PACKAGE: ${{ inputs.apt-package }}
+      DOCUMENTATION_BRANCH: documentation_page
+      DOCUMENTATION_BUILD_DIRECTORY: /tmp/documentation_build
+      DOCUMENTATION_DOCTREE_DIRECTORY: /tmp/documentation_doctrees
+      PAGES_SITE_DIRECTORY: /tmp/pages_site
+
     steps:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
-          ref: master
+          ref: ${{ env.SOURCE_REF }}
+
+      - name: Debug source checkout
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== GitHub context ====="
+          echo "repository:        ${{ github.repository }}"
+          echo "event_name:        ${{ github.event_name }}"
+          echo "workflow ref:      ${{ github.ref }}"
+          echo "workflow sha:      ${{ github.sha }}"
+          echo "source ref input:  ${SOURCE_REF}"
+          echo "package name:      ${PACKAGE_NAME}"
+          echo "python version:    ${PYTHON_VERSION}"
+          echo
+
+          echo "===== source checkout ====="
+          echo "pwd: $(pwd)"
+          echo "current branch:"
+          git branch --show-current || true
+          echo
+
+          echo "current commit:"
+          git log -1 --decorate=full --oneline
+          echo
+
+          echo "all local branches:"
+          git branch --all --verbose --no-abbrev
+          echo
+
+          echo "recent commits:"
+          git log --oneline --decorate --max-count=10
+          echo
+
+          echo "tags sorted by version:"
+          git tag --sort=-v:refname | head -40
+          echo
+
+          echo "tags pointing at HEAD:"
+          git tag --points-at HEAD || true
+          echo
+
+          echo "nearest tag from git describe:"
+          git describe --tags --abbrev=0 || true
+          echo
+
+          echo "repository root files:"
+          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -120
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Debug Python environment before install
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== Python executable ====="
+          which python
+          python --version
+          echo
+
+          echo "===== pip executable ====="
+          python -m pip --version
+          echo
+
+          echo "===== platform ====="
+          python - <<'PY'
+          import platform
+          import sys
+
+          print(f"sys.executable: {sys.executable}")
+          print(f"sys.version: {sys.version}")
+          print(f"platform: {platform.platform()}")
+          PY
 
       - name: Install headless dependencies
         run: |
+          set -Eeuo pipefail
+
           sudo apt-get update
-          if [ -n "${{ inputs.apt-package }}" ]; then
-            sudo apt-get install -y ${{ inputs.apt-package }}
+
+          if [ -n "${APT_PACKAGE}" ]; then
+            echo "===== installing apt packages ====="
+            echo "${APT_PACKAGE}"
+            sudo apt-get install -y ${APT_PACKAGE}
+          else
+            echo "No extra apt packages requested."
           fi
 
       - name: Build package and install documentation dependencies
         run: |
-          python -m pip install --upgrade pip wheel build
-          python -m build --wheel
-          python -m pip install .[documentation]
+          set -Eeuo pipefail
 
-      - name: Get current tag
+          echo "===== install build tools ====="
+          python -m pip install --upgrade pip wheel build
+          echo
+
+          echo "===== build wheel ====="
+          python -m build --wheel
+          echo
+
+          echo "===== built distributions ====="
+          find dist -maxdepth 1 -type f -print | sort
+          echo
+
+          echo "===== install package with documentation extras ====="
+          python -m pip install ".[documentation]"
+          echo
+
+          echo "===== installed package metadata ====="
+          python -m pip show "${PACKAGE_NAME}" || true
+          echo
+
+          echo "===== installed documentation-related packages ====="
+          python -m pip freeze | grep -Ei 'sphinx|docutils|myst|numpydoc|pydata|furo|gallery|design|matplotlib|plotly|jupyter|nbsphinx' || true
+
+      - name: Detect documentation version tag
         run: |
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0.0")
-          echo "tag=$TAG" >> "$GITHUB_ENV"
-          echo "Tag found or default: $TAG"
+          set -Eeuo pipefail
+
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+
+          if [ -z "${TAG}" ]; then
+            TAG="0.0.0.0"
+            echo "No Git tag was reachable from the source checkout. Falling back to ${TAG}."
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_ENV}"
+
+          echo "===== detected documentation version ====="
+          echo "tag: ${TAG}"
+          echo
+
+          echo "===== tag diagnostics ====="
+          echo "commit:"
+          git rev-parse HEAD
+          echo
+
+          echo "nearest tag:"
+          git describe --tags --abbrev=0 || true
+          echo
+
+          echo "exact tags on this commit:"
+          git tag --points-at HEAD || true
+          echo
+
+          echo "tag object details:"
+          git show --no-patch --decorate=full "${TAG}" || true
+          echo
+
+          echo "===== package version diagnostics ====="
+          python - <<'PY'
+          import importlib.metadata
+          import os
+
+          package_name = os.environ["PACKAGE_NAME"]
+
+          try:
+              version = importlib.metadata.version(package_name)
+          except Exception as exception:
+              print(f"Could not read installed package version for {package_name!r}: {exception}")
+          else:
+              print(f"Installed package version: {version}")
+          PY
 
       - name: Build Sphinx documentation
         run: |
-          rm -rf /tmp/documentation_build
-          sphinx-build --verbose -b html docs/source /tmp/documentation_build
-          test -f /tmp/documentation_build/index.html
+          set -Eeuo pipefail
+
+          rm -rf "${DOCUMENTATION_BUILD_DIRECTORY}"
+          rm -rf "${DOCUMENTATION_DOCTREE_DIRECTORY}"
+
+          SPHINX_OPTIONS=(
+            --verbose
+            -b html
+            -d "${DOCUMENTATION_DOCTREE_DIRECTORY}"
+          )
+
+          if [ "${{ inputs.fail-on-sphinx-warning }}" = "true" ]; then
+            SPHINX_OPTIONS+=(
+              -W
+              --keep-going
+            )
+          fi
+
+          echo "===== Sphinx command ====="
+          printf 'sphinx-build %q ' "${SPHINX_OPTIONS[@]}"
+          printf '%q ' "docs/source" "${DOCUMENTATION_BUILD_DIRECTORY}"
+          echo
+          echo
+
+          sphinx-build \
+            "${SPHINX_OPTIONS[@]}" \
+            docs/source \
+            "${DOCUMENTATION_BUILD_DIRECTORY}"
+
+          echo
+          echo "===== Sphinx output verification ====="
+          test -d "${DOCUMENTATION_BUILD_DIRECTORY}"
+          test -f "${DOCUMENTATION_BUILD_DIRECTORY}/index.html"
+
+          echo "output directory:"
+          echo "${DOCUMENTATION_BUILD_DIRECTORY}"
+          echo
+
+          echo "top-level files:"
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" -maxdepth 2 -type f | sort | head -120
+          echo
+
+          echo "top-level directories:"
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" -maxdepth 2 -type d | sort | head -120
+          echo
+
+          echo "index.html size:"
+          wc -c "${DOCUMENTATION_BUILD_DIRECTORY}/index.html"
+          echo
+
+          echo "html file count:"
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" -type f -name '*.html' | wc -l
+          echo
+
+          echo "all file count:"
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" -type f | wc -l
+          echo
+
+          echo "build directory size:"
+          du -sh "${DOCUMENTATION_BUILD_DIRECTORY}"
+          echo
+
+          echo "doctree directory size:"
+          du -sh "${DOCUMENTATION_DOCTREE_DIRECTORY}" || true
+
+      - name: Save generated documentation temporarily
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf /tmp/generated_documentation_for_branch_update
+          cp -a "${DOCUMENTATION_BUILD_DIRECTORY}" /tmp/generated_documentation_for_branch_update
+
+          echo "===== saved generated docs ====="
+          test -f /tmp/generated_documentation_for_branch_update/index.html
+          find /tmp/generated_documentation_for_branch_update -maxdepth 2 -type f | sort | head -80
 
       - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: documentation_page
+          ref: ${{ env.DOCUMENTATION_BRANCH }}
+
+      - name: Debug documentation branch before update
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== documentation branch checkout ====="
+          echo "pwd: $(pwd)"
+          echo
+
+          echo "current branch:"
+          git branch --show-current || true
+          echo
+
+          echo "current commit:"
+          git log -1 --decorate=full --oneline
+          echo
+
+          echo "remote branches:"
+          git branch --all --verbose --no-abbrev
+          echo
+
+          echo "current status:"
+          git status --short
+          echo
+
+          echo "top-level files:"
+          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -120
+          echo
+
+          echo "existing docs directories:"
+          if [ -d docs ]; then
+            find docs -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V
+          else
+            echo "No docs directory exists yet."
+          fi
+          echo
+
+          echo "expected version directory:"
+          echo "docs/${{ env.tag }}"
+          echo
+
+          echo "does expected version directory already exist?"
+          if [ -d "docs/${{ env.tag }}" ]; then
+            echo "yes"
+            echo "file count:"
+            find "docs/${{ env.tag }}" -type f | wc -l
+            echo "size:"
+            du -sh "docs/${{ env.tag }}"
+          else
+            echo "no"
+          fi
+          echo
+
+          echo "does latest directory already exist?"
+          if [ -d docs/latest ]; then
+            echo "yes"
+            echo "file count:"
+            find docs/latest -type f | wc -l
+            echo "size:"
+            du -sh docs/latest
+          else
+            echo "no"
+          fi
 
       - name: Set up Git user
         run: |
+          set -Eeuo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          echo "===== git identity ====="
+          git config user.name
+          git config user.email
+
       - name: Download and render landing page template
         run: |
-          curl -L -o template_index.html https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
-          sed "s|<package>|${{ inputs.package-name }}|g" template_index.html > index.html
+          set -Eeuo pipefail
+
+          echo "===== downloading landing page template ====="
+          curl -fL \
+            -o template_index.html \
+            https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
+
+          echo "===== template preview before rendering ====="
+          sed -n '1,80p' template_index.html
+          echo
+
+          sed "s|<package>|${PACKAGE_NAME}|g" template_index.html > index.html
           rm -f template_index.html
 
-      - name: Update versioned documentation
+          echo "===== rendered landing page preview ====="
+          sed -n '1,80p' index.html
+          echo
+
+          test -f index.html
+
+      - name: Update versioned documentation folders
         run: |
+          set -Eeuo pipefail
+
+          GENERATED_DOCUMENTATION_DIRECTORY=/tmp/generated_documentation_for_branch_update
+
+          test -d "${GENERATED_DOCUMENTATION_DIRECTORY}"
+          test -f "${GENERATED_DOCUMENTATION_DIRECTORY}/index.html"
+
           mkdir -p docs
 
+          echo "===== before replacement ====="
+          echo "version tag: ${{ env.tag }}"
+          echo
+
+          if [ -d "docs/${{ env.tag }}" ]; then
+            echo "Existing docs/${{ env.tag }}:"
+            find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -80
+            du -sh "docs/${{ env.tag }}"
+          else
+            echo "docs/${{ env.tag }} does not exist yet."
+          fi
+          echo
+
+          if [ -d docs/latest ]; then
+            echo "Existing docs/latest:"
+            find docs/latest -maxdepth 2 -type f | sort | head -80
+            du -sh docs/latest
+          else
+            echo "docs/latest does not exist yet."
+          fi
+          echo
+
+          echo "===== removing old target folders ====="
           rm -rf "docs/${{ env.tag }}"
           rm -rf docs/latest
 
-          cp -r /tmp/documentation_build "docs/${{ env.tag }}"
-          cp -r "docs/${{ env.tag }}" docs/latest
+          echo "===== copying generated HTML documentation ====="
+          cp -a "${GENERATED_DOCUMENTATION_DIRECTORY}" "docs/${{ env.tag }}"
+          cp -a "docs/${{ env.tag }}" docs/latest
 
+          echo "===== after replacement ====="
           test -f "docs/${{ env.tag }}/index.html"
-          test -f "docs/latest/index.html"
+          test -f docs/latest/index.html
+
+          echo "docs/${{ env.tag }} file count:"
+          find "docs/${{ env.tag }}" -type f | wc -l
+          echo
+
+          echo "docs/latest file count:"
+          find docs/latest -type f | wc -l
+          echo
+
+          echo "docs/${{ env.tag }} size:"
+          du -sh "docs/${{ env.tag }}"
+          echo
+
+          echo "docs/latest size:"
+          du -sh docs/latest
+          echo
+
+          echo "versioned index checksum:"
+          sha256sum "docs/${{ env.tag }}/index.html"
+          echo
+
+          echo "latest index checksum:"
+          sha256sum docs/latest/index.html
+          echo
+
+          echo "versioned top-level files:"
+          find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -120
+          echo
+
+          echo "latest top-level files:"
+          find docs/latest -maxdepth 2 -type f | sort | head -120
+          echo
+
+          echo "===== git status immediately after folder replacement ====="
+          git status --short
 
       - name: Rebuild version_switcher.json
         run: |
+          set -Eeuo pipefail
+
           json_file="version_switcher.json"
           docs_path="docs"
-          base_url="https://martinpdes.github.io/${{ inputs.package-name }}"
+          base_url="https://martinpdes.github.io/${PACKAGE_NAME}"
 
-          rm -f "$json_file"
-          echo "[" > "$json_file"
+          rm -f "${json_file}"
+
+          echo "[" > "${json_file}"
 
           first_entry=true
 
-          if [ -d "$docs_path/latest" ]; then
+          if [ -d "${docs_path}/latest" ]; then
             latest_url="${base_url}/${docs_path}/latest"
+
             jq -n \
               --arg name "latest" \
               --arg version "latest" \
-              --arg url "$latest_url" \
-              '{name: $name, version: $version, url: $url}' >> "$json_file"
+              --arg url "${latest_url}" \
+              '{name: $name, version: $version, url: $url}' >> "${json_file}"
+
             first_entry=false
           fi
 
-          version_dirs=$(find "$docs_path" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | grep -v "^latest$" | sort -V -r)
+          version_dirs="$(
+            find "${docs_path}" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf "%f\n" \
+              | grep -v "^latest$" \
+              | sort -V -r
+          )"
 
-          for version in $version_dirs; do
+          for version in ${version_dirs}; do
             version_url="${base_url}/${docs_path}/${version}"
 
-            if [ "$first_entry" = false ]; then
-              echo "," >> "$json_file"
+            if [ "${first_entry}" = false ]; then
+              echo "," >> "${json_file}"
             fi
 
             jq -n \
-              --arg name "$version" \
-              --arg version "$version" \
-              --arg url "$version_url" \
-              '{name: $name, version: $version, url: $url}' >> "$json_file"
+              --arg name "${version}" \
+              --arg version "${version}" \
+              --arg url "${version_url}" \
+              '{name: $name, version: $version, url: $url}' >> "${json_file}"
 
             first_entry=false
           done
 
-          echo "]" >> "$json_file"
+          echo "]" >> "${json_file}"
+
+          echo "===== generated version_switcher.json ====="
+          cat "${json_file}"
+          echo
+
+          echo "===== validate version_switcher.json ====="
+          jq . "${json_file}"
+          echo
+
+          echo "===== versions listed in docs/ ====="
+          find docs -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
 
       - name: Verify documentation tree
         run: |
-          echo "===== tag ====="
+          set -Eeuo pipefail
+
+          echo "===== detected tag ====="
           echo "${{ env.tag }}"
           echo
-          echo "===== docs index files ====="
-          find docs -maxdepth 3 -name index.html | sort
-          echo
+
+          echo "===== expected files ====="
           test -f index.html
           test -f version_switcher.json
           test -f "docs/${{ env.tag }}/index.html"
           test -f docs/latest/index.html
+          echo "All expected files exist."
+          echo
+
+          echo "===== docs index files ====="
+          find docs -maxdepth 4 -name index.html | sort
+          echo
+
+          echo "===== versioned docs sample ====="
+          find "docs/${{ env.tag }}" -maxdepth 3 -type f | sort | head -160
+          echo
+
+          echo "===== latest docs sample ====="
+          find docs/latest -maxdepth 3 -type f | sort | head -160
+          echo
+
+          echo "===== versioned docs html count ====="
+          find "docs/${{ env.tag }}" -type f -name '*.html' | wc -l
+          echo
+
+          echo "===== latest docs html count ====="
+          find docs/latest -type f -name '*.html' | wc -l
+          echo
+
+          echo "===== versioned docs size ====="
+          du -sh "docs/${{ env.tag }}"
+          echo
+
+          echo "===== latest docs size ====="
+          du -sh docs/latest
+          echo
+
+          echo "===== possible unwanted Sphinx build internals ====="
+          find docs -path '*/.doctrees/*' -print | head -40 || true
+          echo
+
+          echo "===== git status before staging ====="
+          git status --short
 
       - name: Commit and push documentation branch
         run: |
+          set -Eeuo pipefail
+
+          echo "===== staging documentation files ====="
           git add index.html
           git add version_switcher.json
           git add docs/
 
-          echo "===== staged files ====="
+          echo
+          echo "===== staged files summary ====="
           git status --short
+          echo
+
+          echo "===== staged file count ====="
+          git diff --cached --name-only | wc -l
+          echo
+
+          echo "===== staged files under docs/${{ env.tag }} ====="
+          git diff --cached --name-status -- "docs/${{ env.tag }}" || true
+          echo
+
+          echo "===== staged files under docs/latest ====="
+          git diff --cached --name-status -- docs/latest || true
+          echo
+
+          echo "===== staged files outside docs folders ====="
+          git diff --cached --name-status -- . ":(exclude)docs/${{ env.tag }}" ":(exclude)docs/latest" || true
+          echo
+
+          echo "===== staged diff stat ====="
+          git diff --cached --stat
           echo
 
           if git diff --cached --quiet; then
             echo "No documentation changes to commit."
           else
             git commit -m "Update documentation for ${{ env.tag }} [skip ci]"
-            git pull --rebase origin documentation_page
-            git push origin HEAD:documentation_page
+
+            echo
+            echo "===== commit created ====="
+            git log -1 --decorate=full --stat
+            echo
+
+            echo "===== syncing with remote documentation branch ====="
+            git pull --rebase origin "${DOCUMENTATION_BRANCH}"
+
+            echo
+            echo "===== pushing documentation branch ====="
+            git push origin "HEAD:${DOCUMENTATION_BRANCH}"
           fi
+
+      - name: Debug documentation branch after push
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== final local commit ====="
+          git log -1 --decorate=full --oneline
+          echo
+
+          echo "===== final local status ====="
+          git status --short
+          echo
+
+          echo "===== remote documentation branch head ====="
+          git ls-remote origin "refs/heads/${DOCUMENTATION_BRANCH}"
+          echo
+
+          echo "===== final docs directories ====="
+          find docs -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
+          echo
+
+          echo "===== final expected version directory ====="
+          test -f "docs/${{ env.tag }}/index.html"
+          find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -80
+          echo
+
+          echo "===== final latest directory ====="
+          test -f docs/latest/index.html
+          find docs/latest -maxdepth 2 -type f | sort | head -80
 
       - name: Prepare Pages payload
         run: |
-          rm -rf /tmp/pages_site
-          mkdir -p /tmp/pages_site
+          set -Eeuo pipefail
 
-          cp index.html /tmp/pages_site/
-          cp version_switcher.json /tmp/pages_site/
+          rm -rf "${PAGES_SITE_DIRECTORY}"
+          mkdir -p "${PAGES_SITE_DIRECTORY}"
+
+          cp index.html "${PAGES_SITE_DIRECTORY}/"
+          cp version_switcher.json "${PAGES_SITE_DIRECTORY}/"
 
           if [ -f .nojekyll ]; then
-            cp .nojekyll /tmp/pages_site/
+            cp .nojekyll "${PAGES_SITE_DIRECTORY}/"
           else
-            touch /tmp/pages_site/.nojekyll
+            touch "${PAGES_SITE_DIRECTORY}/.nojekyll"
           fi
 
-          cp -r docs /tmp/pages_site/
+          cp -a docs "${PAGES_SITE_DIRECTORY}/"
 
-          test -f /tmp/pages_site/index.html
-          test -f /tmp/pages_site/version_switcher.json
-          test -f /tmp/pages_site/.nojekyll
-          test -f "/tmp/pages_site/docs/${{ env.tag }}/index.html"
-          test -f /tmp/pages_site/docs/latest/index.html
+          echo "===== Pages payload verification ====="
+          test -f "${PAGES_SITE_DIRECTORY}/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/version_switcher.json"
+          test -f "${PAGES_SITE_DIRECTORY}/.nojekyll"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/latest/index.html"
+
+          echo "payload directory:"
+          echo "${PAGES_SITE_DIRECTORY}"
+          echo
+
+          echo "payload size:"
+          du -sh "${PAGES_SITE_DIRECTORY}"
+          echo
+
+          echo "payload file count:"
+          find "${PAGES_SITE_DIRECTORY}" -type f | wc -l
+          echo
+
+          echo "payload html count:"
+          find "${PAGES_SITE_DIRECTORY}" -type f -name '*.html' | wc -l
 
       - name: Debug Pages payload
         run: |
+          set -Eeuo pipefail
+
           echo "===== payload version_switcher.json ====="
-          cat /tmp/pages_site/version_switcher.json
+          cat "${PAGES_SITE_DIRECTORY}/version_switcher.json"
           echo
+
           echo "===== payload index files ====="
-          find /tmp/pages_site -maxdepth 4 -name index.html | sort
+          find "${PAGES_SITE_DIRECTORY}" -maxdepth 5 -name index.html | sort
           echo
-          echo "===== payload files ====="
-          find /tmp/pages_site -maxdepth 3 -type f | sort
+
+          echo "===== payload top-level files ====="
+          find "${PAGES_SITE_DIRECTORY}" -maxdepth 3 -type f | sort
+          echo
+
+          echo "===== payload docs directories ====="
+          find "${PAGES_SITE_DIRECTORY}/docs" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
+          echo
+
+          echo "===== payload expected version sample ====="
+          find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -100
+          echo
+
+          echo "===== payload latest sample ====="
+          find "${PAGES_SITE_DIRECTORY}/docs/latest" -maxdepth 2 -type f | sort | head -100
 
       - name: Set up GitHub Pages
         uses: actions/configure-pages@v5
@@ -209,7 +760,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: /tmp/pages_site
+          path: ${{ env.PAGES_SITE_DIRECTORY }}
 
       - name: Deploy to GitHub Pages
         id: deployment
@@ -217,19 +768,50 @@ jobs:
 
       - name: Probe live site after deploy
         run: |
+          set -Eeuo pipefail
+
+          base_url="https://martinpdes.github.io/${PACKAGE_NAME}"
+
+          echo "===== deployment output ====="
+          echo "page_url=${{ steps.deployment.outputs.page_url }}"
+          echo "base_url=${base_url}"
+          echo "tag=${{ env.tag }}"
+          echo
+
+          echo "Waiting briefly before probing live GitHub Pages..."
           sleep 20
+
+          echo
           echo "===== live version_switcher.json ====="
-          curl -L https://martinpdes.github.io/${{ inputs.package-name }}/version_switcher.json || true
+          curl -fL "${base_url}/version_switcher.json" || true
+          echo
+
+          echo
+          echo "===== live root ====="
+          curl -IL "${base_url}/" || true
+          echo
+
           echo
           echo "===== live latest ====="
-          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/latest/ || true
+          curl -IL "${base_url}/docs/latest/" || true
+          echo
+
+          echo
+          echo "===== live latest index ====="
+          curl -IL "${base_url}/docs/latest/index.html" || true
+          echo
+
           echo
           echo "===== live tag ====="
-          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/${{ env.tag }}/ || true
+          curl -IL "${base_url}/docs/${{ env.tag }}/" || true
+          echo
+
           echo
           echo "===== live tag index ====="
-          curl -I https://martinpdes.github.io/${{ inputs.package-name }}/docs/${{ env.tag }}/index.html || true
+          curl -IL "${base_url}/docs/${{ env.tag }}/index.html" || true
 
       - name: Print deployment URL
         run: |
+          set -Eeuo pipefail
+
           echo "page_url=${{ steps.deployment.outputs.page_url }}"
