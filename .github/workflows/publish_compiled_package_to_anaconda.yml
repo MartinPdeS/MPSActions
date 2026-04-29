@@ -132,7 +132,7 @@ jobs:
           echo
 
           echo "===== repository files ====="
-          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -160
+          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -180
           echo
 
           echo "===== environment variables ====="
@@ -153,7 +153,7 @@ jobs:
           echo "===== installed APT package versions ====="
           for package_name in ${APT_PACKAGE}; do
             echo "----- ${package_name} -----"
-            dpkg -s "${package_name}" 2>/dev/null | sed -n '1,40p' || true
+            dpkg -s "${package_name}" 2>/dev/null | sed -n '1,50p' || true
             echo
           done
 
@@ -245,11 +245,26 @@ jobs:
           set -Eeuo pipefail
 
           echo "===== installing conda-build and anaconda-client ====="
-          conda install -n base -y -c conda-forge conda-build anaconda-client
+
+          unset CONDA_NO_PLUGINS || true
+
+          conda install \
+            -n base \
+            -y \
+            -c conda-forge \
+            conda-build \
+            anaconda-client
 
       - name: Debug Conda after tool installation
         run: |
           set -Eeuo pipefail
+
+          echo "===== Conda environment after tool installation ====="
+          echo "CONDA=${CONDA:-not-set}"
+          echo "CONDA_PREFIX=${CONDA_PREFIX:-not-set}"
+          echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-not-set}"
+          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+          echo
 
           echo "===== executables ====="
           which conda
@@ -284,8 +299,6 @@ jobs:
           conda config --show
 
       - name: Debug recipe metadata
-        env:
-          CONDA_NO_PLUGINS: "true"
         run: |
           set -Eeuo pipefail
 
@@ -293,9 +306,26 @@ jobs:
           ls -la
           echo
 
+          echo "===== recipe related files ====="
+          find . \
+            -maxdepth 4 \
+            -type f \
+            \( \
+              -name "meta.yaml" \
+              -o -name "conda_build_config.yaml" \
+              -o -name "build.sh" \
+              -o -name "bld.bat" \
+              -o -name "pyproject.toml" \
+              -o -name "setup.cfg" \
+              -o -name "setup.py" \
+            \) \
+            -print \
+            | sort
+          echo
+
           echo "===== meta.yaml ====="
           if [ -f meta.yaml ]; then
-            sed -n '1,360p' meta.yaml
+            sed -n '1,420p' meta.yaml
           else
             echo "No meta.yaml found at repository root."
           fi
@@ -303,15 +333,31 @@ jobs:
 
           echo "===== conda_build_config.yaml ====="
           if [ -f conda_build_config.yaml ]; then
-            sed -n '1,360p' conda_build_config.yaml
+            sed -n '1,420p' conda_build_config.yaml
           else
             echo "No conda_build_config.yaml found."
           fi
           echo
 
+          echo "===== build.sh ====="
+          if [ -f build.sh ]; then
+            sed -n '1,260p' build.sh
+          else
+            echo "No build.sh found at repository root."
+          fi
+          echo
+
+          echo "===== bld.bat ====="
+          if [ -f bld.bat ]; then
+            sed -n '1,260p' bld.bat
+          else
+            echo "No bld.bat found at repository root."
+          fi
+          echo
+
           echo "===== pyproject.toml ====="
           if [ -f pyproject.toml ]; then
-            sed -n '1,360p' pyproject.toml
+            sed -n '1,420p' pyproject.toml
           else
             echo "No pyproject.toml found."
           fi
@@ -319,7 +365,7 @@ jobs:
 
           echo "===== setup.cfg ====="
           if [ -f setup.cfg ]; then
-            sed -n '1,260p' setup.cfg
+            sed -n '1,320p' setup.cfg
           else
             echo "No setup.cfg found."
           fi
@@ -327,63 +373,19 @@ jobs:
 
           echo "===== setup.py ====="
           if [ -f setup.py ]; then
-            sed -n '1,260p' setup.py
+            sed -n '1,320p' setup.py
           else
             echo "No setup.py found."
           fi
-          echo
-
-          echo "===== recipe related files ====="
-          find . \
-            -maxdepth 3 \
-            -type f \
-            \( -name "meta.yaml" -o -name "conda_build_config.yaml" -o -name "build.sh" -o -name "bld.bat" \) \
-            -print \
-            | sort
-
-      - name: Render conda recipe
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== render environment ====="
-          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
-          echo "PYTHON_VERSION=${PYTHON_VERSION}"
-          echo
-
-          echo "===== executables ====="
-          which conda
-          which conda-build
-          conda --version
-          conda-build --version
-          echo
-
-          echo "===== available conda commands ====="
-          conda commands || true
-          echo
-
-          echo "===== conda render ====="
-          conda render . \
-            --python "${PYTHON_VERSION}" \
-            -c martinpdes \
-            -c conda-forge
-          echo
-
-          echo "===== conda render variants ====="
-          conda render . \
-            --python "${PYTHON_VERSION}" \
-            -c martinpdes \
-            -c conda-forge \
-            --variants || true
 
       - name: Debug expected conda build output
-        env:
-          CONDA_NO_PLUGINS: "true"
         run: |
           set -Eeuo pipefail
 
           echo "===== expected build output environment ====="
           echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
           echo "PYTHON_VERSION=${PYTHON_VERSION}"
+          echo "RUNNER_OS=${RUNNER_OS}"
           echo
 
           echo "===== executables ====="
@@ -407,6 +409,8 @@ jobs:
           echo "GITHUB_REF=${GITHUB_REF}"
           echo
 
+          unset CONDA_NO_PLUGINS || true
+
           if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "This is a tag push. Conda upload is enabled."
             conda config --set anaconda_upload true
@@ -420,8 +424,6 @@ jobs:
           conda config --show anaconda_upload
 
       - name: Build conda package
-        env:
-          CONDA_NO_PLUGINS: "true"
         run: |
           set -Eeuo pipefail
 
@@ -489,8 +491,8 @@ jobs:
             | sort || true
           echo
 
-          echo "===== conda-build purge command availability ====="
-          conda-build purge --help >/dev/null 2>&1 || true
+          echo "===== artifact directory tree ====="
+          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -maxdepth 5 -print | sort || true
 
       - name: Collect conda packages for upload
         if: always()
