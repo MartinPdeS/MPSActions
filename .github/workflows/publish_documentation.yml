@@ -55,6 +55,7 @@ jobs:
       DOCUMENTATION_BRANCH: documentation_page
       DOCUMENTATION_BUILD_DIRECTORY: /tmp/documentation_build
       DOCUMENTATION_DOCTREE_DIRECTORY: /tmp/documentation_doctrees
+      GENERATED_DOCUMENTATION_DIRECTORY: /tmp/generated_documentation_for_branch_update
       PAGES_SITE_DIRECTORY: /tmp/pages_site
 
     steps:
@@ -81,6 +82,8 @@ jobs:
 
           echo "===== source checkout ====="
           echo "pwd: $(pwd)"
+          echo
+
           echo "current branch:"
           git branch --show-current || true
           echo
@@ -89,12 +92,12 @@ jobs:
           git log -1 --decorate=full --oneline
           echo
 
-          echo "all local branches:"
+          echo "all local and remote branches:"
           git branch --all --verbose --no-abbrev
           echo
 
           echo "recent commits:"
-          git log --oneline --decorate --max-count=10
+          git log --oneline --decorate --max-count=15
           echo
 
           echo "tags sorted by version:"
@@ -110,7 +113,7 @@ jobs:
           echo
 
           echo "repository root files:"
-          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -120
+          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -160
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -130,7 +133,7 @@ jobs:
           python -m pip --version
           echo
 
-          echo "===== platform ====="
+          echo "===== Python platform ====="
           python - <<'PY'
           import platform
           import sys
@@ -270,20 +273,25 @@ jobs:
           echo "${DOCUMENTATION_BUILD_DIRECTORY}"
           echo
 
-          echo "top-level files:"
-          find "${DOCUMENTATION_BUILD_DIRECTORY}" -maxdepth 2 -type f | sort | head -120
-          echo
-
           echo "top-level directories:"
-          find "${DOCUMENTATION_BUILD_DIRECTORY}" -maxdepth 2 -type d | sort | head -120
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort
           echo
 
-          echo "index.html size:"
-          wc -c "${DOCUMENTATION_BUILD_DIRECTORY}/index.html"
+          echo "top-level files:"
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" \
+            -maxdepth 1 \
+            -type f \
+            -printf "%f\n" \
+            | sort
           echo
 
           echo "html file count:"
-          find "${DOCUMENTATION_BUILD_DIRECTORY}" -type f -name '*.html' | wc -l
+          find "${DOCUMENTATION_BUILD_DIRECTORY}" -type f -name "*.html" | wc -l
           echo
 
           echo "all file count:"
@@ -296,17 +304,109 @@ jobs:
 
           echo "doctree directory size:"
           du -sh "${DOCUMENTATION_DOCTREE_DIRECTORY}" || true
+          echo
+
+          echo "===== gallery existence check ====="
+          if [ -d "${DOCUMENTATION_BUILD_DIRECTORY}/gallery" ]; then
+            echo "Gallery directory exists."
+            find "${DOCUMENTATION_BUILD_DIRECTORY}/gallery" \
+              -maxdepth 3 \
+              -type d \
+              | sort
+          else
+            echo "Gallery directory does not exist."
+          fi
 
       - name: Save generated documentation temporarily
         run: |
           set -Eeuo pipefail
 
-          rm -rf /tmp/generated_documentation_for_branch_update
-          cp -a "${DOCUMENTATION_BUILD_DIRECTORY}" /tmp/generated_documentation_for_branch_update
+          rm -rf "${GENERATED_DOCUMENTATION_DIRECTORY}"
+          cp -a "${DOCUMENTATION_BUILD_DIRECTORY}" "${GENERATED_DOCUMENTATION_DIRECTORY}"
 
           echo "===== saved generated docs ====="
-          test -f /tmp/generated_documentation_for_branch_update/index.html
-          find /tmp/generated_documentation_for_branch_update -maxdepth 2 -type f | sort | head -80
+          test -f "${GENERATED_DOCUMENTATION_DIRECTORY}/index.html"
+          echo
+
+          echo "===== generated documentation top-level directories ====="
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort
+          echo
+
+          echo "===== generated documentation top-level files ====="
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -maxdepth 1 \
+            -type f \
+            -printf "%f\n" \
+            | sort
+          echo
+
+          echo "===== generated gallery directories ====="
+          if [ -d "${GENERATED_DOCUMENTATION_DIRECTORY}/gallery" ]; then
+            find "${GENERATED_DOCUMENTATION_DIRECTORY}/gallery" \
+              -maxdepth 4 \
+              -type d \
+              | sort
+          else
+            echo "No generated gallery directory found."
+          fi
+          echo
+
+          echo "===== generated gallery html files ====="
+          if [ -d "${GENERATED_DOCUMENTATION_DIRECTORY}/gallery" ]; then
+            find "${GENERATED_DOCUMENTATION_DIRECTORY}/gallery" \
+              -type f \
+              -name "*.html" \
+              | sort
+          else
+            echo "No generated gallery HTML files found."
+          fi
+          echo
+
+          echo "===== generated gallery source files ====="
+          if [ -d "${GENERATED_DOCUMENTATION_DIRECTORY}/_sources/gallery" ]; then
+            find "${GENERATED_DOCUMENTATION_DIRECTORY}/_sources/gallery" \
+              -type f \
+              | sort
+          else
+            echo "No generated _sources/gallery directory found."
+          fi
+          echo
+
+          echo "===== generated gallery downloadable files ====="
+          if [ -d "${GENERATED_DOCUMENTATION_DIRECTORY}/_downloads" ]; then
+            find "${GENERATED_DOCUMENTATION_DIRECTORY}/_downloads" \
+              -type f \
+              | sort
+          else
+            echo "No generated _downloads directory found."
+          fi
+          echo
+
+          echo "===== generated gallery images ====="
+          if [ -d "${GENERATED_DOCUMENTATION_DIRECTORY}/_images" ]; then
+            find "${GENERATED_DOCUMENTATION_DIRECTORY}/_images" \
+              -type f \
+              | grep "sphx_glr" \
+              | sort || true
+          else
+            echo "No generated _images directory found."
+          fi
+          echo
+
+          echo "===== generated all html files ====="
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -type f \
+            -name "*.html" \
+            | sort
+          echo
+
+          echo "===== generated documentation size ====="
+          du -sh "${GENERATED_DOCUMENTATION_DIRECTORY}"
 
       - name: Checkout documentation branch
         uses: actions/checkout@v4
@@ -339,12 +439,17 @@ jobs:
           echo
 
           echo "top-level files:"
-          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -120
+          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -160
           echo
 
           echo "existing docs directories:"
           if [ -d docs ]; then
-            find docs -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V
+            find docs \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf "%f\n" \
+              | sort -V
           else
             echo "No docs directory exists yet."
           fi
@@ -359,6 +464,8 @@ jobs:
             echo "yes"
             echo "file count:"
             find "docs/${{ env.tag }}" -type f | wc -l
+            echo "html count:"
+            find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
             echo "size:"
             du -sh "docs/${{ env.tag }}"
           else
@@ -371,10 +478,34 @@ jobs:
             echo "yes"
             echo "file count:"
             find docs/latest -type f | wc -l
+            echo "html count:"
+            find docs/latest -type f -name "*.html" | wc -l
             echo "size:"
             du -sh docs/latest
           else
             echo "no"
+          fi
+          echo
+
+          echo "existing versioned gallery files:"
+          if [ -d "docs/${{ env.tag }}/gallery" ]; then
+            find "docs/${{ env.tag }}/gallery" \
+              -type f \
+              -name "*.html" \
+              | sort
+          else
+            echo "No existing docs/${{ env.tag }}/gallery directory found."
+          fi
+          echo
+
+          echo "existing latest gallery files:"
+          if [ -d docs/latest/gallery ]; then
+            find docs/latest/gallery \
+              -type f \
+              -name "*.html" \
+              | sort
+          else
+            echo "No existing docs/latest/gallery directory found."
           fi
 
       - name: Set up Git user
@@ -398,14 +529,14 @@ jobs:
             https://raw.githubusercontent.com/MartinPdeS/MPSActions/refs/heads/master/asset/template_index.html
 
           echo "===== template preview before rendering ====="
-          sed -n '1,80p' template_index.html
+          sed -n '1,100p' template_index.html
           echo
 
           sed "s|<package>|${PACKAGE_NAME}|g" template_index.html > index.html
           rm -f template_index.html
 
           echo "===== rendered landing page preview ====="
-          sed -n '1,80p' index.html
+          sed -n '1,100p' index.html
           echo
 
           test -f index.html
@@ -413,8 +544,6 @@ jobs:
       - name: Update versioned documentation folders
         run: |
           set -Eeuo pipefail
-
-          GENERATED_DOCUMENTATION_DIRECTORY=/tmp/generated_documentation_for_branch_update
 
           test -d "${GENERATED_DOCUMENTATION_DIRECTORY}"
           test -f "${GENERATED_DOCUMENTATION_DIRECTORY}/index.html"
@@ -427,7 +556,7 @@ jobs:
 
           if [ -d "docs/${{ env.tag }}" ]; then
             echo "Existing docs/${{ env.tag }}:"
-            find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -80
+            find "docs/${{ env.tag }}" -maxdepth 3 -type f | sort | head -160
             du -sh "docs/${{ env.tag }}"
           else
             echo "docs/${{ env.tag }} does not exist yet."
@@ -436,7 +565,7 @@ jobs:
 
           if [ -d docs/latest ]; then
             echo "Existing docs/latest:"
-            find docs/latest -maxdepth 2 -type f | sort | head -80
+            find docs/latest -maxdepth 3 -type f | sort | head -160
             du -sh docs/latest
           else
             echo "docs/latest does not exist yet."
@@ -463,6 +592,14 @@ jobs:
           find docs/latest -type f | wc -l
           echo
 
+          echo "docs/${{ env.tag }} html count:"
+          find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
+          echo
+
+          echo "docs/latest html count:"
+          find docs/latest -type f -name "*.html" | wc -l
+          echo
+
           echo "docs/${{ env.tag }} size:"
           du -sh "docs/${{ env.tag }}"
           echo
@@ -479,16 +616,79 @@ jobs:
           sha256sum docs/latest/index.html
           echo
 
-          echo "versioned top-level files:"
-          find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -120
+          echo "versioned top-level directories:"
+          find "docs/${{ env.tag }}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort
           echo
 
-          echo "latest top-level files:"
-          find docs/latest -maxdepth 2 -type f | sort | head -120
+          echo "latest top-level directories:"
+          find docs/latest \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort
           echo
 
           echo "===== git status immediately after folder replacement ====="
           git status --short
+
+      - name: Verify copied gallery folders
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== versioned gallery directory tree ====="
+          if [ -d "docs/${{ env.tag }}/gallery" ]; then
+            find "docs/${{ env.tag }}/gallery" \
+              -maxdepth 4 \
+              -type d \
+              | sort
+          else
+            echo "Missing docs/${{ env.tag }}/gallery"
+            exit 1
+          fi
+          echo
+
+          echo "===== latest gallery directory tree ====="
+          if [ -d docs/latest/gallery ]; then
+            find docs/latest/gallery \
+              -maxdepth 4 \
+              -type d \
+              | sort
+          else
+            echo "Missing docs/latest/gallery"
+            exit 1
+          fi
+          echo
+
+          echo "===== versioned gallery html files ====="
+          find "docs/${{ env.tag }}/gallery" \
+            -type f \
+            -name "*.html" \
+            | sort
+          echo
+
+          echo "===== latest gallery html files ====="
+          find docs/latest/gallery \
+            -type f \
+            -name "*.html" \
+            | sort
+          echo
+
+          echo "===== required gallery entry points ====="
+          test -f "docs/${{ env.tag }}/gallery/tutorials/index.html"
+          test -f "docs/${{ env.tag }}/gallery/studies/index.html"
+          test -f "docs/${{ env.tag }}/gallery/validation/index.html"
+
+          test -f docs/latest/gallery/tutorials/index.html
+          test -f docs/latest/gallery/studies/index.html
+          test -f docs/latest/gallery/validation/index.html
+
+          echo "Gallery folders were copied correctly."
 
       - name: Rebuild version_switcher.json
         run: |
@@ -553,7 +753,12 @@ jobs:
           echo
 
           echo "===== versions listed in docs/ ====="
-          find docs -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
+          find docs \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort -V
 
       - name: Verify documentation tree
         run: |
@@ -572,23 +777,23 @@ jobs:
           echo
 
           echo "===== docs index files ====="
-          find docs -maxdepth 4 -name index.html | sort
+          find docs -maxdepth 5 -name index.html | sort
           echo
 
           echo "===== versioned docs sample ====="
-          find "docs/${{ env.tag }}" -maxdepth 3 -type f | sort | head -160
+          find "docs/${{ env.tag }}" -maxdepth 4 -type f | sort | head -240
           echo
 
           echo "===== latest docs sample ====="
-          find docs/latest -maxdepth 3 -type f | sort | head -160
+          find docs/latest -maxdepth 4 -type f | sort | head -240
           echo
 
           echo "===== versioned docs html count ====="
-          find "docs/${{ env.tag }}" -type f -name '*.html' | wc -l
+          find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
           echo
 
           echo "===== latest docs html count ====="
-          find docs/latest -type f -name '*.html' | wc -l
+          find docs/latest -type f -name "*.html" | wc -l
           echo
 
           echo "===== versioned docs size ====="
@@ -600,7 +805,7 @@ jobs:
           echo
 
           echo "===== possible unwanted Sphinx build internals ====="
-          find docs -path '*/.doctrees/*' -print | head -40 || true
+          find docs -path "*/.doctrees/*" -print | head -40 || true
           echo
 
           echo "===== git status before staging ====="
@@ -630,6 +835,14 @@ jobs:
 
           echo "===== staged files under docs/latest ====="
           git diff --cached --name-status -- docs/latest || true
+          echo
+
+          echo "===== staged gallery files under docs/${{ env.tag }} ====="
+          git diff --cached --name-status -- "docs/${{ env.tag }}/gallery" || true
+          echo
+
+          echo "===== staged gallery files under docs/latest ====="
+          git diff --cached --name-status -- docs/latest/gallery || true
           echo
 
           echo "===== staged files outside docs folders ====="
@@ -675,17 +888,36 @@ jobs:
           echo
 
           echo "===== final docs directories ====="
-          find docs -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
+          find docs \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort -V
           echo
 
           echo "===== final expected version directory ====="
           test -f "docs/${{ env.tag }}/index.html"
-          find "docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -80
+          find "docs/${{ env.tag }}" -maxdepth 3 -type f | sort | head -160
           echo
 
           echo "===== final latest directory ====="
           test -f docs/latest/index.html
-          find docs/latest -maxdepth 2 -type f | sort | head -80
+          find docs/latest -maxdepth 3 -type f | sort | head -160
+          echo
+
+          echo "===== final versioned gallery html files ====="
+          find "docs/${{ env.tag }}/gallery" \
+            -type f \
+            -name "*.html" \
+            | sort
+          echo
+
+          echo "===== final latest gallery html files ====="
+          find docs/latest/gallery \
+            -type f \
+            -name "*.html" \
+            | sort
 
       - name: Prepare Pages payload
         run: |
@@ -711,6 +943,12 @@ jobs:
           test -f "${PAGES_SITE_DIRECTORY}/.nojekyll"
           test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/index.html"
           test -f "${PAGES_SITE_DIRECTORY}/docs/latest/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/gallery/tutorials/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/gallery/studies/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/gallery/validation/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/latest/gallery/tutorials/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/latest/gallery/studies/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/latest/gallery/validation/index.html"
 
           echo "payload directory:"
           echo "${PAGES_SITE_DIRECTORY}"
@@ -725,7 +963,7 @@ jobs:
           echo
 
           echo "payload html count:"
-          find "${PAGES_SITE_DIRECTORY}" -type f -name '*.html' | wc -l
+          find "${PAGES_SITE_DIRECTORY}" -type f -name "*.html" | wc -l
 
       - name: Debug Pages payload
         run: |
@@ -736,23 +974,46 @@ jobs:
           echo
 
           echo "===== payload index files ====="
-          find "${PAGES_SITE_DIRECTORY}" -maxdepth 5 -name index.html | sort
-          echo
-
-          echo "===== payload top-level files ====="
-          find "${PAGES_SITE_DIRECTORY}" -maxdepth 3 -type f | sort
+          find "${PAGES_SITE_DIRECTORY}" -maxdepth 6 -name index.html | sort
           echo
 
           echo "===== payload docs directories ====="
-          find "${PAGES_SITE_DIRECTORY}/docs" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort -V
+          find "${PAGES_SITE_DIRECTORY}/docs" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort -V
+          echo
+
+          echo "===== payload versioned gallery html files ====="
+          find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/gallery" \
+            -type f \
+            -name "*.html" \
+            | sort
+          echo
+
+          echo "===== payload latest gallery html files ====="
+          find "${PAGES_SITE_DIRECTORY}/docs/latest/gallery" \
+            -type f \
+            -name "*.html" \
+            | sort
           echo
 
           echo "===== payload expected version sample ====="
-          find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}" -maxdepth 2 -type f | sort | head -100
+          find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}" \
+            -maxdepth 3 \
+            -type f \
+            | sort \
+            | head -160
           echo
 
           echo "===== payload latest sample ====="
-          find "${PAGES_SITE_DIRECTORY}/docs/latest" -maxdepth 2 -type f | sort | head -100
+          find "${PAGES_SITE_DIRECTORY}/docs/latest" \
+            -maxdepth 3 \
+            -type f \
+            | sort \
+            | head -160
 
       - name: Set up GitHub Pages
         uses: actions/configure-pages@v5
@@ -802,6 +1063,21 @@ jobs:
           echo
 
           echo
+          echo "===== live latest tutorials gallery ====="
+          curl -IL "${base_url}/docs/latest/gallery/tutorials/" || true
+          echo
+
+          echo
+          echo "===== live latest studies gallery ====="
+          curl -IL "${base_url}/docs/latest/gallery/studies/" || true
+          echo
+
+          echo
+          echo "===== live latest validation gallery ====="
+          curl -IL "${base_url}/docs/latest/gallery/validation/" || true
+          echo
+
+          echo
           echo "===== live tag ====="
           curl -IL "${base_url}/docs/${{ env.tag }}/" || true
           echo
@@ -809,6 +1085,21 @@ jobs:
           echo
           echo "===== live tag index ====="
           curl -IL "${base_url}/docs/${{ env.tag }}/index.html" || true
+          echo
+
+          echo
+          echo "===== live tag tutorials gallery ====="
+          curl -IL "${base_url}/docs/${{ env.tag }}/gallery/tutorials/" || true
+          echo
+
+          echo
+          echo "===== live tag studies gallery ====="
+          curl -IL "${base_url}/docs/${{ env.tag }}/gallery/studies/" || true
+          echo
+
+          echo
+          echo "===== live tag validation gallery ====="
+          curl -IL "${base_url}/docs/${{ env.tag }}/gallery/validation/" || true
 
       - name: Print deployment URL
         run: |
