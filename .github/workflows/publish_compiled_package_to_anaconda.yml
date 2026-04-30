@@ -185,7 +185,7 @@ jobs:
         with:
           miniforge-version: "latest"
           auto-update-conda: false
-          auto-activate-base: true
+          auto-activate: true
           activate-environment: base
           python-version: ${{ matrix.python }}
           channels: ${{ inputs.conda_channels }}
