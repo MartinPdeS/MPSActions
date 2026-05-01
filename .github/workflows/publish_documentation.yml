@@ -19,7 +19,7 @@ on:
       source-ref:
         required: false
         type: string
-        default: "master"
+        default: ""
 
       fail-on-sphinx-warning:
         required: false
@@ -35,28 +35,24 @@ defaults:
     shell: bash
 
 jobs:
-  deploy_documentation:
+  build_documentation:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
-      pages: write
-      id-token: write
+      contents: read
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      tag: ${{ steps.detect_documentation_version_tag.outputs.tag }}
 
     env:
       SOURCE_REF: ${{ inputs.source-ref }}
+      CHECKOUT_REF: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
       PACKAGE_NAME: ${{ inputs.package-name }}
       PYTHON_VERSION: ${{ inputs.python-version }}
       APT_PACKAGE: ${{ inputs.apt-package }}
-      DOCUMENTATION_BRANCH: documentation_page
       DOCUMENTATION_BUILD_DIRECTORY: /tmp/documentation_build
       DOCUMENTATION_DOCTREE_DIRECTORY: /tmp/documentation_doctrees
       GENERATED_DOCUMENTATION_DIRECTORY: /tmp/generated_documentation_for_branch_update
-      PAGES_SITE_DIRECTORY: /tmp/pages_site
 
     steps:
       - name: Checkout source branch
@@ -64,20 +60,23 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
-          ref: ${{ env.SOURCE_REF }}
+          ref: ${{ env.CHECKOUT_REF }}
 
       - name: Debug source checkout
         run: |
           set -Eeuo pipefail
 
           echo "===== GitHub context ====="
-          echo "repository:        ${{ github.repository }}"
-          echo "event_name:        ${{ github.event_name }}"
-          echo "workflow ref:      ${{ github.ref }}"
-          echo "workflow sha:      ${{ github.sha }}"
-          echo "source ref input:  ${SOURCE_REF}"
-          echo "package name:      ${PACKAGE_NAME}"
-          echo "python version:    ${PYTHON_VERSION}"
+          echo "repository:             ${{ github.repository }}"
+          echo "event_name:             ${{ github.event_name }}"
+          echo "workflow ref:           ${{ github.ref }}"
+          echo "workflow ref name:      ${{ github.ref_name }}"
+          echo "workflow ref type:      ${{ github.ref_type }}"
+          echo "workflow sha:           ${{ github.sha }}"
+          echo "source ref input:       ${SOURCE_REF}"
+          echo "resolved checkout ref:  ${CHECKOUT_REF}"
+          echo "package name:           ${PACKAGE_NAME}"
+          echo "python version:         ${PYTHON_VERSION}"
           echo
 
           echo "===== source checkout ====="
@@ -185,6 +184,7 @@ jobs:
           python -m pip freeze | grep -Ei 'sphinx|docutils|myst|numpydoc|pydata|furo|gallery|design|matplotlib|plotly|jupyter|nbsphinx|myst-parser' || true
 
       - name: Detect documentation version tag
+        id: detect_documentation_version_tag
         run: |
           set -Eeuo pipefail
 
@@ -196,6 +196,7 @@ jobs:
           fi
 
           echo "tag=${TAG}" >> "${GITHUB_ENV}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
           echo "===== detected documentation version ====="
           echo "tag: ${TAG}"
@@ -387,6 +388,103 @@ jobs:
           echo "===== generated documentation size ====="
           du -sh "${GENERATED_DOCUMENTATION_DIRECTORY}"
 
+      - name: Upload generated documentation artifact for deploy job
+        if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-documentation
+          path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy_documentation:
+    needs: build_documentation
+
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    env:
+      PACKAGE_NAME: ${{ inputs.package-name }}
+      DOCUMENTATION_BRANCH: documentation_page
+      GENERATED_DOCUMENTATION_DIRECTORY: /tmp/generated_documentation_for_branch_update
+      PAGES_SITE_DIRECTORY: /tmp/pages_site
+      tag: ${{ needs.build_documentation.outputs.tag }}
+
+    steps:
+      - name: Download generated documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-documentation
+          path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
+
+      - name: Debug downloaded generated documentation
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== deploy job context ====="
+          echo "repository:        ${{ github.repository }}"
+          echo "event_name:        ${{ github.event_name }}"
+          echo "workflow ref:      ${{ github.ref }}"
+          echo "workflow ref name: ${{ github.ref_name }}"
+          echo "workflow ref type: ${{ github.ref_type }}"
+          echo "workflow sha:      ${{ github.sha }}"
+          echo "package name:      ${PACKAGE_NAME}"
+          echo "tag:               ${tag}"
+          echo
+
+          echo "===== downloaded generated documentation ====="
+          echo "directory:"
+          echo "${GENERATED_DOCUMENTATION_DIRECTORY}"
+          echo
+
+          test -d "${GENERATED_DOCUMENTATION_DIRECTORY}"
+          test -f "${GENERATED_DOCUMENTATION_DIRECTORY}/index.html"
+
+          echo "top-level directories:"
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf "%f\n" \
+            | sort || true
+          echo
+
+          echo "top-level files:"
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -maxdepth 1 \
+            -type f \
+            -printf "%f\n" \
+            | sort || true
+          echo
+
+          echo "html file count:"
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" -type f -name "*.html" | wc -l
+          echo
+
+          echo "all file count:"
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" -type f | wc -l
+          echo
+
+          echo "directory size:"
+          du -sh "${GENERATED_DOCUMENTATION_DIRECTORY}"
+          echo
+
+          echo "index.html files:"
+          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
+            -type f \
+            -name "index.html" \
+            | sort || true
+
       - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
@@ -435,18 +533,18 @@ jobs:
           echo
 
           echo "expected version directory:"
-          echo "docs/${{ env.tag }}"
+          echo "docs/${tag}"
           echo
 
           echo "does expected version directory already exist?"
-          if [ -d "docs/${{ env.tag }}" ]; then
+          if [ -d "docs/${tag}" ]; then
             echo "yes"
             echo "file count:"
-            find "docs/${{ env.tag }}" -type f | wc -l
+            find "docs/${tag}" -type f | wc -l
             echo "html count:"
-            find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
+            find "docs/${tag}" -type f -name "*.html" | wc -l
             echo "size:"
-            du -sh "docs/${{ env.tag }}"
+            du -sh "docs/${tag}"
           else
             echo "no"
           fi
@@ -520,15 +618,15 @@ jobs:
           mkdir -p docs
 
           echo "===== before replacement ====="
-          echo "version tag: ${{ env.tag }}"
+          echo "version tag: ${tag}"
           echo
 
-          if [ -d "docs/${{ env.tag }}" ]; then
-            echo "Existing docs/${{ env.tag }} sample:"
-            find "docs/${{ env.tag }}" -maxdepth 4 -type f | sort | head -240 || true
-            du -sh "docs/${{ env.tag }}"
+          if [ -d "docs/${tag}" ]; then
+            echo "Existing docs/${tag} sample:"
+            find "docs/${tag}" -maxdepth 4 -type f | sort | head -240 || true
+            du -sh "docs/${tag}"
           else
-            echo "docs/${{ env.tag }} does not exist yet."
+            echo "docs/${tag} does not exist yet."
           fi
           echo
 
@@ -542,35 +640,35 @@ jobs:
           echo
 
           echo "===== removing old target folders ====="
-          rm -rf "docs/${{ env.tag }}"
+          rm -rf "docs/${tag}"
           rm -rf docs/latest
 
           echo "===== copying complete generated HTML documentation ====="
-          cp -a "${GENERATED_DOCUMENTATION_DIRECTORY}" "docs/${{ env.tag }}"
-          cp -a "docs/${{ env.tag }}" docs/latest
+          cp -a "${GENERATED_DOCUMENTATION_DIRECTORY}" "docs/${tag}"
+          cp -a "docs/${tag}" docs/latest
 
           echo "===== after replacement ====="
-          test -f "docs/${{ env.tag }}/index.html"
+          test -f "docs/${tag}/index.html"
           test -f docs/latest/index.html
 
-          echo "docs/${{ env.tag }} file count:"
-          find "docs/${{ env.tag }}" -type f | wc -l
+          echo "docs/${tag} file count:"
+          find "docs/${tag}" -type f | wc -l
           echo
 
           echo "docs/latest file count:"
           find docs/latest -type f | wc -l
           echo
 
-          echo "docs/${{ env.tag }} html count:"
-          find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
+          echo "docs/${tag} html count:"
+          find "docs/${tag}" -type f -name "*.html" | wc -l
           echo
 
           echo "docs/latest html count:"
           find docs/latest -type f -name "*.html" | wc -l
           echo
 
-          echo "docs/${{ env.tag }} size:"
-          du -sh "docs/${{ env.tag }}"
+          echo "docs/${tag} size:"
+          du -sh "docs/${tag}"
           echo
 
           echo "docs/latest size:"
@@ -578,7 +676,7 @@ jobs:
           echo
 
           echo "versioned index checksum:"
-          sha256sum "docs/${{ env.tag }}/index.html"
+          sha256sum "docs/${tag}/index.html"
           echo
 
           echo "latest index checksum:"
@@ -586,7 +684,7 @@ jobs:
           echo
 
           echo "versioned top-level directories:"
-          find "docs/${{ env.tag }}" \
+          find "docs/${tag}" \
             -mindepth 1 \
             -maxdepth 1 \
             -type d \
@@ -604,7 +702,7 @@ jobs:
           echo
 
           echo "versioned index.html files:"
-          find "docs/${{ env.tag }}" \
+          find "docs/${tag}" \
             -type f \
             -name "index.html" \
             | sort || true
@@ -626,19 +724,19 @@ jobs:
 
           echo "===== generic documentation verification ====="
 
-          test -d "docs/${{ env.tag }}"
+          test -d "docs/${tag}"
           test -d docs/latest
-          test -f "docs/${{ env.tag }}/index.html"
+          test -f "docs/${tag}/index.html"
           test -f docs/latest/index.html
 
-          versioned_html_count="$(find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l | tr -d ' ')"
+          versioned_html_count="$(find "docs/${tag}" -type f -name "*.html" | wc -l | tr -d ' ')"
           latest_html_count="$(find docs/latest -type f -name "*.html" | wc -l | tr -d ' ')"
 
           echo "versioned_html_count=${versioned_html_count}"
           echo "latest_html_count=${latest_html_count}"
 
           if [ "${versioned_html_count}" -eq 0 ]; then
-            echo "No HTML files were copied into docs/${{ env.tag }}."
+            echo "No HTML files were copied into docs/${tag}."
             exit 1
           fi
 
@@ -649,7 +747,7 @@ jobs:
 
           echo
           echo "===== versioned documentation directory tree, shallow ====="
-          find "docs/${{ env.tag }}" \
+          find "docs/${tag}" \
             -maxdepth 3 \
             -print \
             | sort \
@@ -741,13 +839,13 @@ jobs:
           set -Eeuo pipefail
 
           echo "===== detected tag ====="
-          echo "${{ env.tag }}"
+          echo "${tag}"
           echo
 
           echo "===== expected root files ====="
           test -f index.html
           test -f version_switcher.json
-          test -f "docs/${{ env.tag }}/index.html"
+          test -f "docs/${tag}/index.html"
           test -f docs/latest/index.html
           echo "All expected root files exist."
           echo
@@ -757,7 +855,7 @@ jobs:
           echo
 
           echo "===== versioned docs html files, sample ====="
-          find "docs/${{ env.tag }}" -type f -name "*.html" | sort | head -240 || true
+          find "docs/${tag}" -type f -name "*.html" | sort | head -240 || true
           echo
 
           echo "===== latest docs html files, sample ====="
@@ -765,7 +863,7 @@ jobs:
           echo
 
           echo "===== versioned docs html count ====="
-          find "docs/${{ env.tag }}" -type f -name "*.html" | wc -l
+          find "docs/${tag}" -type f -name "*.html" | wc -l
           echo
 
           echo "===== latest docs html count ====="
@@ -773,7 +871,7 @@ jobs:
           echo
 
           echo "===== versioned docs size ====="
-          du -sh "docs/${{ env.tag }}"
+          du -sh "docs/${tag}"
           echo
 
           echo "===== latest docs size ====="
@@ -789,10 +887,10 @@ jobs:
             cat .gitignore
             echo
             echo "check ignore rules for versioned index:"
-            git check-ignore -v "docs/${{ env.tag }}/index.html" || true
+            git check-ignore -v "docs/${tag}/index.html" || true
             echo
             echo "ignored files under versioned docs:"
-            git status --ignored --short -- "docs/${{ env.tag }}" | head -80 || true
+            git status --ignored --short -- "docs/${tag}" | head -80 || true
           else
             echo "No .gitignore found on documentation branch."
           fi
@@ -813,7 +911,7 @@ jobs:
             git add .nojekyll
           fi
 
-          git add -f "docs/${{ env.tag }}"
+          git add -f "docs/${tag}"
           git add -f docs/latest
 
           echo
@@ -825,8 +923,8 @@ jobs:
           git diff --cached --name-only | wc -l
           echo
 
-          echo "===== staged files under docs/${{ env.tag }} ====="
-          git diff --cached --name-status -- "docs/${{ env.tag }}" || true
+          echo "===== staged files under docs/${tag} ====="
+          git diff --cached --name-status -- "docs/${tag}" || true
           echo
 
           echo "===== staged files under docs/latest ====="
@@ -834,7 +932,7 @@ jobs:
           echo
 
           echo "===== staged files outside copied docs folders ====="
-          git diff --cached --name-status -- . ":(exclude)docs/${{ env.tag }}" ":(exclude)docs/latest" || true
+          git diff --cached --name-status -- . ":(exclude)docs/${tag}" ":(exclude)docs/latest" || true
           echo
 
           echo "===== staged diff stat ====="
@@ -844,7 +942,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No documentation changes to commit."
           else
-            git commit -m "Update documentation for ${{ env.tag }} [skip ci]"
+            git commit -m "Update documentation for ${tag} [skip ci]"
 
             echo
             echo "===== commit created ====="
@@ -885,8 +983,8 @@ jobs:
           echo
 
           echo "===== final expected version directory ====="
-          test -f "docs/${{ env.tag }}/index.html"
-          find "docs/${{ env.tag }}" -maxdepth 3 -type f | sort | head -160 || true
+          test -f "docs/${tag}/index.html"
+          find "docs/${tag}" -maxdepth 3 -type f | sort | head -160 || true
           echo
 
           echo "===== final latest directory ====="
@@ -915,10 +1013,10 @@ jobs:
           test -f "${PAGES_SITE_DIRECTORY}/index.html"
           test -f "${PAGES_SITE_DIRECTORY}/version_switcher.json"
           test -f "${PAGES_SITE_DIRECTORY}/.nojekyll"
-          test -f "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}/index.html"
+          test -f "${PAGES_SITE_DIRECTORY}/docs/${tag}/index.html"
           test -f "${PAGES_SITE_DIRECTORY}/docs/latest/index.html"
 
-          payload_versioned_html_count="$(find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}" -type f -name "*.html" | wc -l | tr -d ' ')"
+          payload_versioned_html_count="$(find "${PAGES_SITE_DIRECTORY}/docs/${tag}" -type f -name "*.html" | wc -l | tr -d ' ')"
           payload_latest_html_count="$(find "${PAGES_SITE_DIRECTORY}/docs/latest" -type f -name "*.html" | wc -l | tr -d ' ')"
 
           echo "payload_versioned_html_count=${payload_versioned_html_count}"
@@ -972,7 +1070,7 @@ jobs:
           echo
 
           echo "===== payload expected version sample ====="
-          find "${PAGES_SITE_DIRECTORY}/docs/${{ env.tag }}" \
+          find "${PAGES_SITE_DIRECTORY}/docs/${tag}" \
             -maxdepth 4 \
             -type f \
             | sort \
@@ -1007,7 +1105,7 @@ jobs:
           echo "===== deployment output ====="
           echo "page_url=${{ steps.deployment.outputs.page_url }}"
           echo "base_url=${base_url}"
-          echo "tag=${{ env.tag }}"
+          echo "tag=${tag}"
           echo
 
           echo "Waiting briefly before probing live GitHub Pages..."
@@ -1035,12 +1133,12 @@ jobs:
 
           echo
           echo "===== live tag ====="
-          curl -IL "${base_url}/docs/${{ env.tag }}/" || true
+          curl -IL "${base_url}/docs/${tag}/" || true
           echo
 
           echo
           echo "===== live tag index ====="
-          curl -IL "${base_url}/docs/${{ env.tag }}/index.html" || true
+          curl -IL "${base_url}/docs/${tag}/index.html" || true
 
       - name: Print deployment URL
         run: |
