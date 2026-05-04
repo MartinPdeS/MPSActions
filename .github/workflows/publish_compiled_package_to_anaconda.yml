@@ -191,6 +191,7 @@ jobs:
           channels: ${{ inputs.conda_channels }}
           channel-priority: flexible
           show-channel-urls: true
+          conda-remove-defaults: true
 
       - name: Debug Conda before tool installation
         run: |
@@ -234,11 +235,11 @@ jobs:
           echo
 
           echo "===== search conda-build ====="
-          conda search conda-build --info || true
+          conda search conda-build --override-channels -c conda-forge --info || true
           echo
 
           echo "===== search anaconda-client ====="
-          conda search anaconda-client --info || true
+          conda search anaconda-client --override-channels -c conda-forge --info || true
 
       - name: Install conda build tools
         run: |
@@ -251,6 +252,7 @@ jobs:
           conda install \
             -n base \
             -y \
+            --override-channels \
             -c conda-forge \
             conda-build \
             anaconda-client
@@ -386,6 +388,7 @@ jobs:
           echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
           echo "PYTHON_VERSION=${PYTHON_VERSION}"
           echo "RUNNER_OS=${RUNNER_OS}"
+          echo "CONDA_CHANNELS=${CONDA_CHANNELS}"
           echo
 
           echo "===== executables ====="
@@ -393,11 +396,25 @@ jobs:
           conda-build --version
           echo
 
+          echo "===== channel arguments ====="
+          IFS=',' read -ra CONDA_CHANNEL_ARRAY <<< "${CONDA_CHANNELS}"
+
+          CONDA_CHANNEL_ARGUMENTS=()
+          for channel_name in "${CONDA_CHANNEL_ARRAY[@]}"; do
+            channel_name="$(echo "${channel_name}" | xargs)"
+
+            if [ -n "${channel_name}" ]; then
+              CONDA_CHANNEL_ARGUMENTS+=("-c" "${channel_name}")
+              echo "-c ${channel_name}"
+            fi
+          done
+
+          echo
           echo "===== expected conda build output path ====="
           conda-build . \
             --python "${PYTHON_VERSION}" \
-            -c martinpdes \
-            -c conda-forge \
+            --override-channels \
+            "${CONDA_CHANNEL_ARGUMENTS[@]}" \
             --output
 
       - name: Configure conda upload behavior
@@ -432,6 +449,7 @@ jobs:
           echo "CONDA_BUILD_OUTPUT_DIRECTORY=${CONDA_BUILD_OUTPUT_DIRECTORY}"
           echo "RUNNER_OS=${RUNNER_OS}"
           echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
+          echo "CONDA_CHANNELS=${CONDA_CHANNELS}"
           echo
 
           echo "===== executables ====="
@@ -439,14 +457,28 @@ jobs:
           conda-build --version
           echo
 
+          echo "===== channel arguments ====="
+          IFS=',' read -ra CONDA_CHANNEL_ARRAY <<< "${CONDA_CHANNELS}"
+
+          CONDA_CHANNEL_ARGUMENTS=()
+          for channel_name in "${CONDA_CHANNEL_ARRAY[@]}"; do
+            channel_name="$(echo "${channel_name}" | xargs)"
+
+            if [ -n "${channel_name}" ]; then
+              CONDA_CHANNEL_ARGUMENTS+=("-c" "${channel_name}")
+              echo "-c ${channel_name}"
+            fi
+          done
+
           rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
           mkdir -p "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 
+          echo
           echo "===== starting conda-build ====="
           conda-build . \
             --python "${PYTHON_VERSION}" \
-            -c martinpdes \
-            -c conda-forge \
+            --override-channels \
+            "${CONDA_CHANNEL_ARGUMENTS[@]}" \
             --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 
       - name: Debug build artifacts
