@@ -211,7 +211,6 @@ jobs:
           which conda
           which python
           python --version
-          conda --version
           echo
 
           echo "===== conda info ====="
@@ -273,13 +272,6 @@ jobs:
           which conda-build
           which anaconda
           which python
-          echo
-
-          echo "===== versions ====="
-          conda --version
-          conda-build --version
-          anaconda --version
-          python --version
           echo
 
           echo "===== selected package versions ====="
@@ -605,7 +597,6 @@ jobs:
 
           echo "===== Anaconda client ====="
           which anaconda
-          anaconda --version
           echo
 
           echo "===== upload starts ====="
