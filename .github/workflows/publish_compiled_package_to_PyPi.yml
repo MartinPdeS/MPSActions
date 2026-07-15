@@ -92,7 +92,7 @@ jobs:
           PYVISTA_OFF_SCREEN: "true"
           LIBGL_ALWAYS_SOFTWARE: "1"
           MESA_GL_VERSION_OVERRIDE: "3.3"
-          MACOSX_DEPLOYMENT_TARGET: "15.0"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
         with:
           output-dir: dist
 
