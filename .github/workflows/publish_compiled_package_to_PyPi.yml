@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "16.4"
+          xcode-version: "26.6"
 
       - name: Install GCC
         run: |
