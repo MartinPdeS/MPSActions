@@ -253,7 +253,7 @@ jobs:
             -y \
             --override-channels \
             -c conda-forge \
-            conda-build \
+            "conda-build<26" \
             anaconda-client
 
       - name: Debug Conda after tool installation
