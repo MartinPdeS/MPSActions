@@ -1,0 +1,128 @@
+name: Build Conda Package
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      package_name:
+        required: true
+        type: string
+      test_import:
+        required: true
+        type: string
+      apt_package:
+        required: false
+        type: string
+        default: ""
+      brew_package:
+        required: false
+        type: string
+        default: ""
+      conda_channels:
+        required: false
+        type: string
+        default: "martinpdes,conda-forge"
+
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  build:
+    name: Build / ${{ inputs.os }} / Python ${{ inputs.python_version }}
+    runs-on: ${{ inputs.os }}
+    env:
+      CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux' && inputs.apt_package != ''
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt_package }}
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS' && inputs.brew_package != ''
+        run: |
+          set -Eeuo pipefail
+          brew update
+          brew install ${{ inputs.brew_package }}
+
+      - name: Set up Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          auto-update-conda: false
+          auto-activate: true
+          activate-environment: base
+          python-version: ${{ inputs.python_version }}
+          channels: ${{ inputs.conda_channels }}
+          channel-priority: strict
+          conda-remove-defaults: true
+
+      - name: Install Conda build tools
+        run: |
+          set -Eeuo pipefail
+          conda install -n base -y --override-channels -c conda-forge "conda-build<26"
+          conda --version
+          conda-build --version
+
+      - name: Build package
+        run: |
+          set -Eeuo pipefail
+          IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
+          channel_arguments=()
+          for channel in "${channels[@]}"; do
+            channel="$(echo "${channel}" | xargs)"
+            [ -z "${channel}" ] || channel_arguments+=("-c" "${channel}")
+          done
+
+          rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
+          mkdir -p "${CONDA_BUILD_OUTPUT_DIRECTORY}"
+
+          # conda-build currently creates an invalid *_debug_cpython
+          # constraint for its own test environment. The artifact is tested
+          # independently in the next step.
+          conda-build . --no-test --python "${{ inputs.python_version }}" \
+            --override-channels "${channel_arguments[@]}" \
+            --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
+
+      - name: Verify a clean installation
+        run: |
+          set -Eeuo pipefail
+          test_prefix="${RUNNER_TEMP}/conda-package-test"
+          mapfile -t packages < <(find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \))
+          [ "${#packages[@]}" -gt 0 ] || { echo "No Conda package was built."; exit 1; }
+
+          IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
+          channel_arguments=("-c" "file://${GITHUB_WORKSPACE}/${CONDA_BUILD_OUTPUT_DIRECTORY}")
+          for channel in "${channels[@]}"; do
+            channel="$(echo "${channel}" | xargs)"
+            [ -z "${channel}" ] || channel_arguments+=("-c" "${channel}")
+          done
+
+          rm -rf "${test_prefix}"
+          conda create -y -p "${test_prefix}" --override-channels \
+            "${channel_arguments[@]}" \
+            "python=${{ inputs.python_version }}" "${{ inputs.package_name }}"
+          conda run -p "${test_prefix}" python -c "import ${{ inputs.test_import }}"
+
+      - name: Upload built package
+        uses: actions/upload-artifact@v4
+        with:
+          name: conda-package-${{ inputs.os }}-py${{ inputs.python_version }}
+          path: |
+            conda-build-artifacts/**/*.conda
+            conda-build-artifacts/**/*.tar.bz2
+          if-no-files-found: error

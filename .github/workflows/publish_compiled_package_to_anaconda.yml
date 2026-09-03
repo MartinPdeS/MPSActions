@@ -12,11 +12,11 @@ on:
         required: true
         type: string
       package_name:
-        description: Conda package name used for the clean-install check.
+        description: Name of the Conda package to install for verification.
         required: true
         type: string
       test_import:
-        description: Python module imported after installing the built package.
+        description: Python module imported to verify the installed package.
         required: true
         type: string
       apt_package:
@@ -35,57 +35,32 @@ on:
         required: false
         type: string
         default: "martinpdes"
-
     secrets:
       ANACONDA_API_TOKEN:
         required: true
 
-defaults:
-  run:
-    shell: bash -l {0}
-
 jobs:
-  conda_deployment:
-    name: ${{ matrix.os }} / Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
-
+  build:
     strategy:
       fail-fast: false
       matrix:
         os: ${{ fromJson(inputs.os_list) }}
         python: ${{ fromJson(inputs.python_versions) }}
+    uses: ./.github/workflows/build_conda_package.yml
+    with:
+      os: ${{ matrix.os }}
+      python_version: ${{ matrix.python }}
+      package_name: ${{ inputs.package_name }}
+      test_import: ${{ inputs.test_import }}
+      apt_package: ${{ inputs.apt_package }}
+      brew_package: ${{ inputs.brew_package }}
+      conda_channels: ${{ inputs.conda_channels }}
 
-    env:
-      PYTHON_VERSION: ${{ matrix.python }}
-      PACKAGE_NAME: ${{ inputs.package_name }}
-      TEST_IMPORT: ${{ inputs.test_import }}
-      APT_PACKAGE: ${{ inputs.apt_package }}
-      BREW_PACKAGE: ${{ inputs.brew_package }}
-      CONDA_CHANNELS: ${{ inputs.conda_channels }}
-      CONDA_UPLOAD_USER: ${{ inputs.conda_upload_user }}
-      CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
-      CONDA_TEST_PREFIX: ${{ runner.temp }}/conda-package-test
-
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux' && inputs.apt_package != ''
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ${APT_PACKAGE}
-
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS' && inputs.brew_package != ''
-        run: |
-          set -Eeuo pipefail
-          brew update
-          brew install ${BREW_PACKAGE}
-
       - name: Set up Miniforge
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -93,93 +68,32 @@ jobs:
           auto-update-conda: false
           auto-activate: true
           activate-environment: base
-          python-version: ${{ matrix.python }}
           channels: ${{ inputs.conda_channels }}
           channel-priority: strict
           conda-remove-defaults: true
 
-      - name: Install Conda build tools
+      - name: Install Anaconda client
         run: |
           set -Eeuo pipefail
-          conda install -n base -y --override-channels -c conda-forge \
-            "conda-build<26" anaconda-client
-          conda --version
-          conda-build --version
+          conda install -n base -y --override-channels -c conda-forge anaconda-client
 
-      - name: Build Conda package
-        run: |
-          set -Eeuo pipefail
+      - name: Download verified packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: conda-package-*
+          path: conda-build-artifacts
+          merge-multiple: true
 
-          IFS=',' read -ra CHANNELS <<< "${CONDA_CHANNELS}"
-          CHANNEL_ARGUMENTS=()
-          for channel in "${CHANNELS[@]}"; do
-            channel="$(echo "${channel}" | xargs)"
-            [ -z "${channel}" ] || CHANNEL_ARGUMENTS+=("-c" "${channel}")
-          done
-
-          rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-          mkdir -p "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-
-          # Conda-build produces an invalid *_debug_cpython constraint while
-          # constructing its own test environment. Test the produced artifact
-          # in a normal isolated Conda environment below instead.
-          conda-build . --no-test --python "${PYTHON_VERSION}" \
-            --override-channels "${CHANNEL_ARGUMENTS[@]}" \
-            --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-
-      - name: Verify clean installation of the built package
-        run: |
-          set -Eeuo pipefail
-
-          mapfile -t PACKAGE_FILES < <(
-            find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \
-              \( -name '*.conda' -o -name '*.tar.bz2' \)
-          )
-          [ "${#PACKAGE_FILES[@]}" -gt 0 ] || {
-            echo "No Conda package was built."
-            exit 1
-          }
-
-          IFS=',' read -ra CHANNELS <<< "${CONDA_CHANNELS}"
-          CHANNEL_ARGUMENTS=(
-            "-c"
-            "file://${GITHUB_WORKSPACE}/${CONDA_BUILD_OUTPUT_DIRECTORY}"
-          )
-          for channel in "${CHANNELS[@]}"; do
-            channel="$(echo "${channel}" | xargs)"
-            [ -z "${channel}" ] || CHANNEL_ARGUMENTS+=("-c" "${channel}")
-          done
-
-          rm -rf "${CONDA_TEST_PREFIX}"
-          conda create -y -p "${CONDA_TEST_PREFIX}" --override-channels \
-            "${CHANNEL_ARGUMENTS[@]}" \
-            "python=${PYTHON_VERSION}" "${PACKAGE_NAME}"
-
-          conda run -p "${CONDA_TEST_PREFIX}" \
-            python -c "import ${TEST_IMPORT}"
-
-      - name: Upload Conda packages to Anaconda
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      - name: Upload packages to Anaconda
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           set -Eeuo pipefail
+          mapfile -t packages < <(find conda-build-artifacts -type f \( -name '*.conda' -o -name '*.tar.bz2' \))
+          [ "${#packages[@]}" -gt 0 ] || { echo "No Conda packages were downloaded."; exit 1; }
 
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \
-            \( -name '*.conda' -o -name '*.tar.bz2' \) -print0 |
-            while IFS= read -r -d '' package_path; do
-              anaconda --token "${ANACONDA_API_TOKEN}" upload \
-                --user "${CONDA_UPLOAD_USER}" \
-                --force \
-                "${package_path}"
-            done
-
-      - name: Upload package artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: conda-package-${{ matrix.os }}-py${{ matrix.python }}
-          path: |
-            conda-build-artifacts/**/*.conda
-            conda-build-artifacts/**/*.tar.bz2
-          if-no-files-found: warn
+          for package_path in "${packages[@]}"; do
+            anaconda --token "${ANACONDA_API_TOKEN}" upload \
+              --user "${{ inputs.conda_upload_user }}" \
+              --force "${package_path}"
+          done
