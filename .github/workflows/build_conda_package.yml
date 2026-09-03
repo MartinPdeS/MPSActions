@@ -102,8 +102,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test_prefix="${RUNNER_TEMP}/conda-package-test"
-          mapfile -t packages < <(find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \))
-          [ "${#packages[@]}" -gt 0 ] || { echo "No Conda package was built."; exit 1; }
+          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit | grep -q . || { echo "No Conda package was built."; exit 1; }
 
           IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
           local_channel="$(python -c 'import os; from pathlib import Path; print((Path(os.environ["GITHUB_WORKSPACE"]) / os.environ["CONDA_BUILD_OUTPUT_DIRECTORY"]).resolve().as_uri())')"
