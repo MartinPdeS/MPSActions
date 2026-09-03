@@ -4,30 +4,33 @@ on:
   workflow_call:
     inputs:
       python_versions:
-        description: "JSON list of Python versions"
+        description: JSON list of Python versions to build.
         required: true
         type: string
-
       os_list:
-        description: "JSON list of OS runners such as ['ubuntu-latest','macos-latest']"
+        description: JSON list of GitHub Actions runners.
         required: true
         type: string
-
+      package_name:
+        description: Conda package name used for the clean-install check.
+        required: true
+        type: string
+      test_import:
+        description: Python module imported after installing the built package.
+        required: true
+        type: string
       apt_package:
         required: false
         type: string
         default: ""
-
       brew_package:
         required: false
         type: string
         default: ""
-
       conda_channels:
         required: false
         type: string
         default: "martinpdes,conda-forge"
-
       conda_upload_user:
         required: false
         type: string
@@ -43,8 +46,7 @@ defaults:
 
 jobs:
   conda_deployment:
-    name: Build on ${{ matrix.os }} Python ${{ matrix.python }}
-
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -55,568 +57,124 @@ jobs:
 
     env:
       PYTHON_VERSION: ${{ matrix.python }}
+      PACKAGE_NAME: ${{ inputs.package_name }}
+      TEST_IMPORT: ${{ inputs.test_import }}
       APT_PACKAGE: ${{ inputs.apt_package }}
       BREW_PACKAGE: ${{ inputs.brew_package }}
       CONDA_CHANNELS: ${{ inputs.conda_channels }}
       CONDA_UPLOAD_USER: ${{ inputs.conda_upload_user }}
-      ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
       CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
-      PACKAGE_LIST_FILE: conda-packages-to-upload.txt
+      CONDA_TEST_PREFIX: ${{ runner.temp }}/conda-package-test
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
 
-      - name: Debug GitHub and system information
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== GitHub context ====="
-          echo "repository:        ${{ github.repository }}"
-          echo "event_name:        ${{ github.event_name }}"
-          echo "ref:               ${{ github.ref }}"
-          echo "ref_name:          ${{ github.ref_name }}"
-          echo "sha:               ${{ github.sha }}"
-          echo "actor:             ${{ github.actor }}"
-          echo "workflow:          ${{ github.workflow }}"
-          echo "job:               ${{ github.job }}"
-          echo "run_id:            ${{ github.run_id }}"
-          echo "run_attempt:       ${{ github.run_attempt }}"
-          echo
-
-          echo "===== matrix ====="
-          echo "runner.os:         ${{ runner.os }}"
-          echo "matrix.os:         ${{ matrix.os }}"
-          echo "matrix.python:     ${{ matrix.python }}"
-          echo
-
-          echo "===== workflow inputs ====="
-          echo "APT_PACKAGE:       ${APT_PACKAGE}"
-          echo "BREW_PACKAGE:      ${BREW_PACKAGE}"
-          echo "CONDA_CHANNELS:    ${CONDA_CHANNELS}"
-          echo "CONDA_UPLOAD_USER: ${CONDA_UPLOAD_USER}"
-          echo
-
-          echo "===== runner ====="
-          echo "RUNNER_OS:         ${RUNNER_OS}"
-          echo "RUNNER_ARCH:       ${RUNNER_ARCH}"
-          echo "GITHUB_WORKSPACE:  ${GITHUB_WORKSPACE}"
-          echo "SHELL:             ${SHELL:-not-set}"
-          echo "BASH_VERSION:      ${BASH_VERSION:-not-set}"
-          echo
-
-          uname -a || true
-          echo
-
-          echo "===== shell executables ====="
-          command -v bash || true
-          bash --version || true
-          echo
-
-          echo "===== git ====="
-          git --version
-          git status --short
-          git log -1 --decorate=full --oneline
-          git describe --tags --always --dirty || true
-          echo
-
-          echo "===== tags pointing at HEAD ====="
-          git tag --points-at HEAD || true
-          echo
-
-          echo "===== recent tags ====="
-          git tag --sort=-v:refname | head -40 || true
-          echo
-
-          echo "===== repository files ====="
-          find . -maxdepth 2 -type f | sort | sed 's|^\./||' | head -180
-          echo
-
-          echo "===== environment variables ====="
-          env | sort
-
-      - name: Install APT packages
+      - name: Install Linux build dependencies
         if: runner.os == 'Linux' && inputs.apt_package != ''
         run: |
           set -Eeuo pipefail
-
-          echo "===== installing APT packages ====="
-          echo "${APT_PACKAGE}"
-
           sudo apt-get update
           sudo apt-get install -y ${APT_PACKAGE}
 
-          echo
-          echo "===== installed APT package versions ====="
-          for package_name in ${APT_PACKAGE}; do
-            echo "----- ${package_name} -----"
-            dpkg -s "${package_name}" 2>/dev/null | sed -n '1,50p' || true
-            echo
-          done
-
-      - name: Install Homebrew packages
+      - name: Install macOS build dependencies
         if: runner.os == 'macOS' && inputs.brew_package != ''
         run: |
           set -Eeuo pipefail
-
-          echo "===== Homebrew state before install ====="
-          command -v brew
-          brew --version
-          brew config
-          echo
-
-          echo "===== installing Homebrew packages ====="
-          echo "${BREW_PACKAGE}"
-
           brew update
           brew install ${BREW_PACKAGE}
 
-          echo
-          echo "===== installed Homebrew package versions ====="
-          for package_name in ${BREW_PACKAGE}; do
-            brew list --versions "${package_name}" || true
-          done
-
-      - name: Install Miniforge
+      - name: Set up Miniforge
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniforge-version: "latest"
+          miniforge-version: latest
           auto-update-conda: false
           auto-activate: true
           activate-environment: base
           python-version: ${{ matrix.python }}
           channels: ${{ inputs.conda_channels }}
-          channel-priority: flexible
-          show-channel-urls: true
+          channel-priority: strict
           conda-remove-defaults: true
 
-      - name: Debug Conda before tool installation
+      - name: Install Conda build tools
         run: |
           set -Eeuo pipefail
-
-          echo "===== Conda environment ====="
-          echo "CONDA=${CONDA:-not-set}"
-          echo "CONDA_PREFIX=${CONDA_PREFIX:-not-set}"
-          echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-not-set}"
-          echo "CONDA_SHLVL=${CONDA_SHLVL:-not-set}"
-          echo "CONDA_EXE=${CONDA_EXE:-not-set}"
-          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
-          echo "PATH=${PATH}"
-          echo
-
-          echo "===== executables ====="
-          which conda
-          which python
-          python --version
-          echo
-
-          echo "===== conda info ====="
-          conda info
-          echo
-
-          echo "===== conda config sources ====="
-          conda config --show-sources
-          echo
-
-          echo "===== conda config ====="
-          conda config --show
-          echo
-
-          echo "===== base environment package list ====="
-          conda list
-          echo
-
-          echo "===== available conda commands before conda-build install ====="
-          conda commands || true
-          echo
-
-          echo "===== search conda-build ====="
-          conda search conda-build --override-channels -c conda-forge --info || true
-          echo
-
-          echo "===== search anaconda-client ====="
-          conda search anaconda-client --override-channels -c conda-forge --info || true
-
-      - name: Install conda build tools
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== installing conda-build and anaconda-client ====="
-
-          unset CONDA_NO_PLUGINS || true
-
-          conda install \
-            -n base \
-            -y \
-            --override-channels \
-            -c conda-forge \
-            "conda-build<26" \
-            anaconda-client
-
-      - name: Debug Conda after tool installation
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== Conda environment after tool installation ====="
-          echo "CONDA=${CONDA:-not-set}"
-          echo "CONDA_PREFIX=${CONDA_PREFIX:-not-set}"
-          echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-not-set}"
-          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
-          echo
-
-          echo "===== executables ====="
-          which conda
-          which conda-build
-          which anaconda
-          which python
-          echo
-
-          echo "===== selected package versions ====="
-          conda list conda
-          conda list conda-build
-          conda list anaconda-client
-          conda list python
-          echo
-
-          echo "===== available conda commands after conda-build install ====="
-          conda commands || true
-          echo
-
-          echo "===== conda info ====="
-          conda info
-          echo
-
-          echo "===== conda config ====="
-          conda config --show
-
-      - name: Debug recipe metadata
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== repository files ====="
-          ls -la
-          echo
-
-          echo "===== recipe related files ====="
-          find . \
-            -maxdepth 4 \
-            -type f \
-            \( \
-              -name "meta.yaml" \
-              -o -name "conda_build_config.yaml" \
-              -o -name "build.sh" \
-              -o -name "bld.bat" \
-              -o -name "pyproject.toml" \
-              -o -name "setup.cfg" \
-              -o -name "setup.py" \
-            \) \
-            -print \
-            | sort
-          echo
-
-          echo "===== meta.yaml ====="
-          if [ -f meta.yaml ]; then
-            sed -n '1,420p' meta.yaml
-          else
-            echo "No meta.yaml found at repository root."
-          fi
-          echo
-
-          echo "===== conda_build_config.yaml ====="
-          if [ -f conda_build_config.yaml ]; then
-            sed -n '1,420p' conda_build_config.yaml
-          else
-            echo "No conda_build_config.yaml found."
-          fi
-          echo
-
-          echo "===== build.sh ====="
-          if [ -f build.sh ]; then
-            sed -n '1,260p' build.sh
-          else
-            echo "No build.sh found at repository root."
-          fi
-          echo
-
-          echo "===== bld.bat ====="
-          if [ -f bld.bat ]; then
-            sed -n '1,260p' bld.bat
-          else
-            echo "No bld.bat found at repository root."
-          fi
-          echo
-
-          echo "===== pyproject.toml ====="
-          if [ -f pyproject.toml ]; then
-            sed -n '1,420p' pyproject.toml
-          else
-            echo "No pyproject.toml found."
-          fi
-          echo
-
-          echo "===== setup.cfg ====="
-          if [ -f setup.cfg ]; then
-            sed -n '1,320p' setup.cfg
-          else
-            echo "No setup.cfg found."
-          fi
-          echo
-
-          echo "===== setup.py ====="
-          if [ -f setup.py ]; then
-            sed -n '1,320p' setup.py
-          else
-            echo "No setup.py found."
-          fi
-
-      - name: Debug expected conda build output
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== expected build output environment ====="
-          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
-          echo "PYTHON_VERSION=${PYTHON_VERSION}"
-          echo "RUNNER_OS=${RUNNER_OS}"
-          echo "CONDA_CHANNELS=${CONDA_CHANNELS}"
-          echo
-
-          echo "===== executables ====="
-          which conda-build
+          conda install -n base -y --override-channels -c conda-forge \
+            "conda-build<26" anaconda-client
+          conda --version
           conda-build --version
-          echo
 
-          echo "===== channel arguments ====="
-          IFS=',' read -ra CONDA_CHANNEL_ARRAY <<< "${CONDA_CHANNELS}"
-
-          CONDA_CHANNEL_ARGUMENTS=()
-          for channel_name in "${CONDA_CHANNEL_ARRAY[@]}"; do
-            channel_name="$(echo "${channel_name}" | xargs)"
-
-            if [ -n "${channel_name}" ]; then
-              CONDA_CHANNEL_ARGUMENTS+=("-c" "${channel_name}")
-              echo "-c ${channel_name}"
-            fi
-          done
-
-          echo
-          echo "===== expected conda build output path ====="
-          conda-build . \
-            --python "${PYTHON_VERSION}" \
-            --override-channels \
-            "${CONDA_CHANNEL_ARGUMENTS[@]}" \
-            --output
-
-      - name: Configure conda upload behavior
+      - name: Build Conda package
         run: |
           set -Eeuo pipefail
 
-          echo "===== upload decision ====="
-          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
-          echo "GITHUB_REF=${GITHUB_REF}"
-          echo
-
-          unset CONDA_NO_PLUGINS || true
-
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "This is a tag push. Conda upload is enabled."
-            conda config --set anaconda_upload true
-          else
-            echo "This is not a tag push. Conda upload is disabled."
-            conda config --set anaconda_upload false
-          fi
-
-          echo
-          echo "===== anaconda_upload config ====="
-          conda config --show anaconda_upload
-
-      - name: Build conda package
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== build parameters ====="
-          echo "PYTHON_VERSION=${PYTHON_VERSION}"
-          echo "CONDA_BUILD_OUTPUT_DIRECTORY=${CONDA_BUILD_OUTPUT_DIRECTORY}"
-          echo "RUNNER_OS=${RUNNER_OS}"
-          echo "CONDA_NO_PLUGINS=${CONDA_NO_PLUGINS:-not-set}"
-          echo "CONDA_CHANNELS=${CONDA_CHANNELS}"
-          echo
-
-          echo "===== executables ====="
-          which conda-build
-          conda-build --version
-          echo
-
-          echo "===== channel arguments ====="
-          IFS=',' read -ra CONDA_CHANNEL_ARRAY <<< "${CONDA_CHANNELS}"
-
-          CONDA_CHANNEL_ARGUMENTS=()
-          for channel_name in "${CONDA_CHANNEL_ARRAY[@]}"; do
-            channel_name="$(echo "${channel_name}" | xargs)"
-
-            if [ -n "${channel_name}" ]; then
-              CONDA_CHANNEL_ARGUMENTS+=("-c" "${channel_name}")
-              echo "-c ${channel_name}"
-            fi
+          IFS=',' read -ra CHANNELS <<< "${CONDA_CHANNELS}"
+          CHANNEL_ARGUMENTS=()
+          for channel in "${CHANNELS[@]}"; do
+            channel="$(echo "${channel}" | xargs)"
+            [ -z "${channel}" ] || CHANNEL_ARGUMENTS+=("-c" "${channel}")
           done
 
           rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
           mkdir -p "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 
-          echo
-          echo "===== starting conda-build ====="
-          conda-build . \
-            --python "${PYTHON_VERSION}" \
-            --override-channels \
-            "${CONDA_CHANNEL_ARGUMENTS[@]}" \
+          # Conda-build produces an invalid *_debug_cpython constraint while
+          # constructing its own test environment. Test the produced artifact
+          # in a normal isolated Conda environment below instead.
+          conda-build . --no-test --python "${PYTHON_VERSION}" \
+            --override-channels "${CHANNEL_ARGUMENTS[@]}" \
             --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 
-      - name: Debug build artifacts
-        if: always()
+      - name: Verify clean installation of the built package
         run: |
           set -Eeuo pipefail
 
-          echo "===== build artifact directory ====="
-          if [ -d "${CONDA_BUILD_OUTPUT_DIRECTORY}" ]; then
-            echo "exists: ${CONDA_BUILD_OUTPUT_DIRECTORY}"
-            du -sh "${CONDA_BUILD_OUTPUT_DIRECTORY}" || true
-          else
-            echo "missing: ${CONDA_BUILD_OUTPUT_DIRECTORY}"
-          fi
-          echo
+          mapfile -t PACKAGE_FILES < <(
+            find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \
+              \( -name '*.conda' -o -name '*.tar.bz2' \)
+          )
+          [ "${#PACKAGE_FILES[@]}" -gt 0 ] || {
+            echo "No Conda package was built."
+            exit 1
+          }
 
-          echo "===== all files under build artifact directory ====="
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -maxdepth 8 -type f -print | sort || true
-          echo
+          IFS=',' read -ra CHANNELS <<< "${CONDA_CHANNELS}"
+          CHANNEL_ARGUMENTS=(
+            "-c"
+            "file://${GITHUB_WORKSPACE}/${CONDA_BUILD_OUTPUT_DIRECTORY}"
+          )
+          for channel in "${CHANNELS[@]}"; do
+            channel="$(echo "${channel}" | xargs)"
+            [ -z "${channel}" ] || CHANNEL_ARGUMENTS+=("-c" "${channel}")
+          done
 
-          echo "===== conda package files ====="
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" \
-            -type f \
-            \( -name "*.conda" -o -name "*.tar.bz2" \) \
-            -print \
-            | sort || true
-          echo
+          rm -rf "${CONDA_TEST_PREFIX}"
+          conda create -y -p "${CONDA_TEST_PREFIX}" --override-channels \
+            "${CHANNEL_ARGUMENTS[@]}" \
+            "python=${PYTHON_VERSION}" "${PACKAGE_NAME}"
 
-          echo "===== package count ====="
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" \
-            -type f \
-            \( -name "*.conda" -o -name "*.tar.bz2" \) \
-            -print \
-            | wc -l || true
-          echo
+          conda run -p "${CONDA_TEST_PREFIX}" \
+            python -c "import ${TEST_IMPORT}"
 
-          echo "===== package sizes ====="
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" \
-            -type f \
-            \( -name "*.conda" -o -name "*.tar.bz2" \) \
-            -exec ls -lh {} \; \
-            | sort || true
-          echo
-
-          echo "===== artifact directory tree ====="
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -maxdepth 5 -print | sort || true
-
-      - name: Collect conda packages for upload
-        if: always()
-        run: |
-          set -Eeuo pipefail
-
-          rm -f "${PACKAGE_LIST_FILE}"
-
-          echo "===== collecting conda packages without globstar ====="
-          if [ -d "${CONDA_BUILD_OUTPUT_DIRECTORY}" ]; then
-            find "${CONDA_BUILD_OUTPUT_DIRECTORY}" \
-              -type f \
-              \( -name "*.conda" -o -name "*.tar.bz2" \) \
-              -print \
-              | sort > "${PACKAGE_LIST_FILE}"
-          else
-            touch "${PACKAGE_LIST_FILE}"
-          fi
-
-          echo "===== package list file ====="
-          cat "${PACKAGE_LIST_FILE}" || true
-          echo
-
-          echo "===== package count ====="
-          package_count="$(wc -l < "${PACKAGE_LIST_FILE}" | tr -d ' ')"
-          echo "${package_count}"
-          echo "PACKAGE_COUNT=${package_count}" >> "${GITHUB_ENV}"
-
-          echo
-          echo "===== package metadata ====="
-          while IFS= read -r package_path; do
-            [ -n "${package_path}" ] || continue
-
-            echo "----- ${package_path} -----"
-            ls -lh "${package_path}"
-
-            echo "sha256:"
-            if command -v shasum >/dev/null 2>&1; then
-              shasum -a 256 "${package_path}"
-            elif command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "${package_path}"
-            else
-              echo "No sha256 command available."
-            fi
-
-            echo
-          done < "${PACKAGE_LIST_FILE}"
-
-      - name: Upload conda package to Anaconda
+      - name: Upload Conda packages to Anaconda
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         run: |
           set -Eeuo pipefail
 
-          echo "===== upload conda packages to Anaconda ====="
-          echo "CONDA_UPLOAD_USER=${CONDA_UPLOAD_USER}"
-          echo "PACKAGE_COUNT=${PACKAGE_COUNT:-not-set}"
-          echo "PACKAGE_LIST_FILE=${PACKAGE_LIST_FILE}"
-          echo
+          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \
+            \( -name '*.conda' -o -name '*.tar.bz2' \) -print0 |
+            while IFS= read -r -d '' package_path; do
+              anaconda --token "${ANACONDA_API_TOKEN}" upload \
+                --user "${CONDA_UPLOAD_USER}" \
+                --force \
+                "${package_path}"
+            done
 
-          if [ ! -f "${PACKAGE_LIST_FILE}" ]; then
-            echo "Package list file is missing: ${PACKAGE_LIST_FILE}"
-            exit 1
-          fi
-
-          package_count="$(wc -l < "${PACKAGE_LIST_FILE}" | tr -d ' ')"
-
-          if [ "${package_count}" -eq 0 ]; then
-            echo "No conda packages found to upload."
-            echo
-            echo "Artifact tree:"
-            find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -maxdepth 8 -type f -print | sort || true
-            exit 1
-          fi
-
-          echo "Packages to upload:"
-          cat "${PACKAGE_LIST_FILE}"
-          echo
-
-          echo "===== Anaconda client ====="
-          which anaconda
-          echo
-
-          echo "===== upload starts ====="
-
-          while IFS= read -r package_path; do
-            [ -n "${package_path}" ] || continue
-
-            echo
-            echo "Uploading package:"
-            echo "${package_path}"
-
-            anaconda \
-              --token "${ANACONDA_API_TOKEN}" \
-              upload \
-              --user "${CONDA_UPLOAD_USER}" \
-              --force \
-              "${package_path}"
-          done < "${PACKAGE_LIST_FILE}"
-
-      - name: Upload package as GitHub Actions artifact
+      - name: Upload package artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
