@@ -106,7 +106,8 @@ jobs:
           [ "${#packages[@]}" -gt 0 ] || { echo "No Conda package was built."; exit 1; }
 
           IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
-          channel_arguments=("-c" "file://${GITHUB_WORKSPACE}/${CONDA_BUILD_OUTPUT_DIRECTORY}")
+          local_channel="$(python -c 'import os; from pathlib import Path; print((Path(os.environ["GITHUB_WORKSPACE"]) / os.environ["CONDA_BUILD_OUTPUT_DIRECTORY"]).resolve().as_uri())')"
+          channel_arguments=("-c" "${local_channel}")
           for channel in "${channels[@]}"; do
             channel="$(echo "${channel}" | xargs)"
             [ -z "${channel}" ] || channel_arguments+=("-c" "${channel}")
