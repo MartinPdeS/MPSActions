@@ -76,6 +76,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           conda install -n base -y --override-channels -c conda-forge anaconda-client
+          conda run -n base anaconda --version
 
       - name: Download verified packages
         uses: actions/download-artifact@v4
@@ -93,7 +94,7 @@ jobs:
           [ "${#packages[@]}" -gt 0 ] || { echo "No Conda packages were downloaded."; exit 1; }
 
           for package_path in "${packages[@]}"; do
-            anaconda --token "${ANACONDA_API_TOKEN}" upload \
+            conda run -n base anaconda --token "${ANACONDA_API_TOKEN}" upload \
               --user "${{ inputs.conda_upload_user }}" \
               --force "${package_path}"
           done
