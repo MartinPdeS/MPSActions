@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: "martinpdes,conda-forge"
+      recipe_path:
+        description: Path to the Conda recipe directory or meta.yaml file.
+        required: false
+        type: string
+        default: "."
       max_artifact_size_mb:
         description: Maximum permitted Conda archive size in MiB.
         required: false
@@ -106,7 +111,7 @@ jobs:
           # conda-build currently creates an invalid *_debug_cpython
           # constraint for its own test environment. The artifact is tested
           # independently in the next step.
-          conda-build . --no-test --python "${{ inputs.python_version }}" \
+          conda-build "${{ inputs.recipe_path }}" --no-test --python "${{ inputs.python_version }}" \
             --override-channels "${channel_arguments[@]}" \
             --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 

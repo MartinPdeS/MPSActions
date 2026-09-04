@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: "martinpdes,conda-forge"
+      recipe_path:
+        description: Path to the Conda recipe directory or meta.yaml file.
+        required: false
+        type: string
+        default: "."
       max_artifact_size_mb:
         description: Maximum permitted Conda archive size in MiB.
         required: false
@@ -68,6 +73,7 @@ jobs:
       apt_package: ${{ inputs.apt_package }}
       brew_package: ${{ inputs.brew_package }}
       conda_channels: ${{ inputs.conda_channels }}
+      recipe_path: ${{ inputs.recipe_path }}
 
   publish:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
