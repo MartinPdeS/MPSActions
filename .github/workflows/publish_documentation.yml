@@ -117,7 +117,7 @@ jobs:
           find . -maxdepth 3 -type f | sort | sed 's|^\./||' | head -240
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
