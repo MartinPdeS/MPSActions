@@ -17,8 +17,9 @@ on:
         type: string
       test_import:
         description: Python module imported to verify the installed package.
-        required: true
         type: string
+        required: false
+        default: ""
       apt_package:
         required: false
         type: string

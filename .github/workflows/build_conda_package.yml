@@ -13,8 +13,9 @@ on:
         required: true
         type: string
       test_import:
-        required: true
         type: string
+        required: false
+        default: ""
       apt_package:
         required: false
         type: string
@@ -116,8 +117,10 @@ jobs:
           conda create -y -p "${test_prefix}" --override-channels \
             "${channel_arguments[@]}" \
             "python=${{ inputs.python_version }}" "${{ inputs.package_name }}"
-          cd "${RUNNER_TEMP}"
-          conda run -p "${test_prefix}" python -c "import ${{ inputs.test_import }}"
+          if [ -n "${{ inputs.test_import }}" ]; then
+            cd "${RUNNER_TEMP}"
+            conda run -p "${test_prefix}" python -c "import ${{ inputs.test_import }}"
+          fi
 
       - name: Upload built package
         uses: actions/upload-artifact@v4
