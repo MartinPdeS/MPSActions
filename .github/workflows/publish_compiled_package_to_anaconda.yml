@@ -83,7 +83,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           conda install -n base -y --override-channels -c conda-forge anaconda-client
-          conda run -n base anaconda --version
+          conda run -n base anaconda --help >/dev/null
 
       - name: Download verified packages
         uses: actions/download-artifact@v5
