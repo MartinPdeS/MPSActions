@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: "martinpdes,conda-forge"
+      max_artifact_size_mb:
+        description: Maximum permitted Conda archive size in MiB.
+        required: false
+        type: number
+        default: 500
       conda_upload_user:
         required: false
         type: string
@@ -59,6 +64,7 @@ jobs:
       package_name: ${{ inputs.package_name }}
       test_import: ${{ inputs.test_import }}
       test_command: ${{ inputs.test_command }}
+      max_artifact_size_mb: ${{ inputs.max_artifact_size_mb }}
       apt_package: ${{ inputs.apt_package }}
       brew_package: ${{ inputs.brew_package }}
       conda_channels: ${{ inputs.conda_channels }}
@@ -69,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@v4
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
         with:
           miniforge-version: latest
           auto-update-conda: false
@@ -86,7 +92,7 @@ jobs:
           conda run -n base anaconda --help >/dev/null
 
       - name: Download verified packages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           pattern: conda-package-*
           path: conda-build-artifacts

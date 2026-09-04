@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: "martinpdes,conda-forge"
+      max_artifact_size_mb:
+        description: Maximum permitted Conda archive size in MiB.
+        required: false
+        type: number
+        default: 500
 
 defaults:
   run:
@@ -47,7 +52,7 @@ jobs:
       CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
           submodules: true
@@ -67,7 +72,7 @@ jobs:
           brew install ${{ inputs.brew_package }}
 
       - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@v4
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
         with:
           miniforge-version: latest
           auto-update-conda: false
@@ -132,8 +137,24 @@ jobs:
             echo "No installed-package verification command was configured."
           fi
 
+      - name: Check artifact size and create manifest
+        run: |
+          set -Eeuo pipefail
+          manifest="${CONDA_BUILD_OUTPUT_DIRECTORY}/ARTIFACTS.sha256"
+          : > "${manifest}"
+          while IFS= read -r package_path; do
+            size_bytes="$(wc -c < "${package_path}" | tr -d ' ')"
+            size_mib=$((size_bytes / 1024 / 1024))
+            printf '%s MiB  %s\n' "${size_mib}" "${package_path}"
+            if [ "${size_mib}" -gt "${{ inputs.max_artifact_size_mb }}" ]; then
+              echo "Artifact exceeds ${{ inputs.max_artifact_size_mb }} MiB: ${package_path}" >&2
+              exit 1
+            fi
+            sha256sum "${package_path}" >> "${manifest}"
+          done < <(find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \) | sort)
+
       - name: Upload built package
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: conda-package-${{ inputs.os }}-py${{ inputs.python_version }}
           path: |

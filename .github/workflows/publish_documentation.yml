@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout source branch
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
           submodules: true
@@ -117,7 +117,7 @@ jobs:
           find . -maxdepth 3 -type f | sort | sed 's|^\./||' | head -240
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -392,7 +392,7 @@ jobs:
 
       - name: Upload generated documentation artifact for deploy job
         if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: generated-documentation
           path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
@@ -424,7 +424,7 @@ jobs:
 
     steps:
       - name: Download generated documentation artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: generated-documentation
           path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
@@ -488,7 +488,7 @@ jobs:
             | sort || true
 
       - name: Checkout documentation branch
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
           ref: ${{ env.DOCUMENTATION_BRANCH }}
@@ -1084,16 +1084,16 @@ jobs:
             | head -240 || true
 
       - name: Set up GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
           path: ${{ env.PAGES_SITE_DIRECTORY }}
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
 
       - name: Probe live site after deploy
         run: |

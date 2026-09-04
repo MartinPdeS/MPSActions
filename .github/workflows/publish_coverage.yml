@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -38,7 +38,7 @@ jobs:
           sudo apt-get install -y ${{ inputs.apt-package }}
 
       - name: Checkout requirements and files for testing
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
           submodules: true
@@ -63,7 +63,7 @@ jobs:
             --config-file=pytest.ini
 
       - name: Post coverage comment
-        uses: py-cov-action/python-coverage-comment-action@v3
+        uses: py-cov-action/python-coverage-comment-action@a05be3d2e8a6272d3ef5fb2840ab20368bb2eb71
         with:
           GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
           MINIMUM_GREEN: 90

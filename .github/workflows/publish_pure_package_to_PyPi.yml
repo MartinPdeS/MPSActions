@@ -20,12 +20,12 @@ jobs:
     ManyLinux_x86_64:
       runs-on: ubuntu-latest
       steps:
-        - uses: actions/checkout@v5
+        - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
           with:
             fetch-depth: 0
             submodules: 'true'
 
-        - uses: actions/setup-python@v6
+        - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
           with:
               python-version: ${{ inputs.python-version }}
 
@@ -50,7 +50,7 @@ jobs:
               PATH="${test_directory}/venv/bin:${PATH}" bash -c "${{ inputs.test-command }}"
 
         - name: "Upload: Wheel Artifact"
-          uses: actions/upload-artifact@v6
+          uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
           with:
               name: wheel-artifact
               path: ./dist/*
@@ -60,13 +60,13 @@ jobs:
         needs: [ManyLinux_x86_64]
         runs-on: ubuntu-latest
         steps:
-          - uses: actions/checkout@v5
+          - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
             with:
                 fetch-depth: 0
                 submodules: 'true'
 
           - name: "Set-up: Python ${{ inputs.python-version }}"
-            uses: actions/setup-python@v6
+            uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
             with:
                 python-version: "${{ inputs.python-version }}"
 
@@ -77,13 +77,13 @@ jobs:
                 python -m pip install twine
 
           - name: "Download: Wheel Artifact"
-            uses: actions/download-artifact@v5
+            uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
             with:
                 name: wheel-artifact
                 path: ./dist
 
           - name: "Publish: Wheel"
-            uses: pypa/gh-action-pypi-publish@v1.5.1
+            uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0
             env:
                 MY_SECRET: ${{ inputs.password }}
             with:
