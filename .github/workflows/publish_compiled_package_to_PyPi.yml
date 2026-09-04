@@ -118,6 +118,9 @@ jobs:
           msystem: MINGW64
           install: ${{ inputs.mingw-package }}
           path-type: inherit
+          # GitHub's MSYS2 cache occasionally returns HTTP 400 before the
+          # wheel build starts. A fresh setup is slower but reliable.
+          cache: false
 
       - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67
 
@@ -169,4 +172,3 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
-
