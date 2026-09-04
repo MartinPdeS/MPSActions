@@ -52,7 +52,7 @@ jobs:
       matrix:
         os: ${{ fromJson(inputs.os_list) }}
         python: ${{ fromJson(inputs.python_versions) }}
-    uses: ./.github/workflows/build_conda_package.yml
+    uses: MartinPdeS/MPSActions/.github/workflows/build_conda_package.yml@v1
     with:
       os: ${{ matrix.os }}
       python_version: ${{ matrix.python }}
