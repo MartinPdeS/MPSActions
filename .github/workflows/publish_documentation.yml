@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout source branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -392,7 +392,7 @@ jobs:
 
       - name: Upload generated documentation artifact for deploy job
         if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: generated-documentation
           path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
@@ -424,7 +424,7 @@ jobs:
 
     steps:
       - name: Download generated documentation artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: generated-documentation
           path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
@@ -488,7 +488,7 @@ jobs:
             | sort || true
 
       - name: Checkout documentation branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ env.DOCUMENTATION_BRANCH }}
@@ -1087,13 +1087,13 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ env.PAGES_SITE_DIRECTORY }}
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       - name: Probe live site after deploy
         run: |

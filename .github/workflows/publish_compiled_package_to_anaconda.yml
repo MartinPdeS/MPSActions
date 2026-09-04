@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: latest
           auto-update-conda: false
@@ -86,7 +86,7 @@ jobs:
           conda run -n base anaconda --version
 
       - name: Download verified packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: conda-package-*
           path: conda-build-artifacts

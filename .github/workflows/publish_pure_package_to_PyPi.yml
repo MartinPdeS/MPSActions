@@ -6,6 +6,11 @@ on:
       python-version:
         required: true
         type: string
+      test-command:
+        description: Optional command to run after installing the wheel in a fresh environment.
+        required: false
+        type: string
+        default: ""
     secrets:
       PYPI_API_TOKEN:
         required: true
@@ -15,12 +20,12 @@ jobs:
     ManyLinux_x86_64:
       runs-on: ubuntu-latest
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v5
           with:
             fetch-depth: 0
             submodules: 'true'
 
-        - uses: actions/setup-python@v4
+        - uses: actions/setup-python@v6
           with:
               python-version: ${{ inputs.python-version }}
 
@@ -33,8 +38,19 @@ jobs:
               pytest -s
               python -m build
 
+        - name: Test built wheel in isolation
+          if: inputs.test-command != ''
+          shell: bash
+          run: |
+              set -Eeuo pipefail
+              test_directory="$(mktemp -d)"
+              python -m venv "${test_directory}/venv"
+              "${test_directory}/venv/bin/python" -m pip install dist/*.whl
+              cd "${test_directory}"
+              PATH="${test_directory}/venv/bin:${PATH}" bash -c "${{ inputs.test-command }}"
+
         - name: "Upload: Wheel Artifact"
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v6
           with:
               name: wheel-artifact
               path: ./dist/*
@@ -44,13 +60,13 @@ jobs:
         needs: [ManyLinux_x86_64]
         runs-on: ubuntu-latest
         steps:
-          - uses: actions/checkout@v4
+          - uses: actions/checkout@v5
             with:
                 fetch-depth: 0
                 submodules: 'true'
 
           - name: "Set-up: Python ${{ inputs.python-version }}"
-            uses: actions/setup-python@v4
+            uses: actions/setup-python@v6
             with:
                 python-version: "${{ inputs.python-version }}"
 
@@ -61,7 +77,7 @@ jobs:
                 python -m pip install twine
 
           - name: "Download: Wheel Artifact"
-            uses: actions/download-artifact@v4
+            uses: actions/download-artifact@v5
             with:
                 name: wheel-artifact
                 path: ./dist

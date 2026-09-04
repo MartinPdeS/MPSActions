@@ -47,7 +47,7 @@ jobs:
       CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -67,7 +67,7 @@ jobs:
           brew install ${{ inputs.brew_package }}
 
       - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: latest
           auto-update-conda: false
@@ -133,7 +133,7 @@ jobs:
           fi
 
       - name: Upload built package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: conda-package-${{ inputs.os }}-py${{ inputs.python_version }}
           path: |
