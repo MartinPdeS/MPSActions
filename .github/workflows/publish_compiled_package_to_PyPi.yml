@@ -111,15 +111,14 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - uses: msys2/setup-msys2@f84a36b4009b96413f91c01441130855db9392e5
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
         if: ${{ inputs.mingw-package != '' }}
         id: msys2
         with:
           msystem: MINGW64
           install: ${{ inputs.mingw-package }}
           path-type: inherit
-          # GitHub's MSYS2 cache occasionally returns HTTP 400 before the
-          # wheel build starts. A fresh setup is slower but reliable.
+          # A fresh setup avoids transient GitHub cache-service failures.
           cache: false
 
       - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67
