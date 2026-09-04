@@ -9,6 +9,12 @@ on:
       apt-package:
         required: false
         type: string
+        default: ""
+      coverage-package:
+        description: Optional Python package to measure with coverage.
+        required: false
+        type: string
+        default: ""
 
     secrets:
       _GITHUB_TOKEN:
@@ -26,6 +32,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install apt dependencies
+        if: inputs.apt-package != ''
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ inputs.apt-package }}
@@ -43,9 +50,12 @@ jobs:
 
       - name: Run pytest with coverage
         run: |
-          python -m pytest \
+          coverage_arguments=()
+          if [ -n "${{ inputs.coverage-package }}" ]; then
+            coverage_arguments+=("--cov=${{ inputs.coverage-package }}")
+          fi
+          python -m pytest "${coverage_arguments[@]}" \
             --import-mode=importlib \
-            --cov=PyMieSim \
             --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \

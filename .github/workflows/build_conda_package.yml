@@ -13,6 +13,12 @@ on:
         required: true
         type: string
       test_import:
+        description: Deprecated Python import target for installed-package verification.
+        type: string
+        required: false
+        default: ""
+      test_command:
+        description: Optional command to run in the clean Conda test environment.
         type: string
         required: false
         default: ""
@@ -99,7 +105,7 @@ jobs:
             --override-channels "${channel_arguments[@]}" \
             --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
 
-      - name: Verify a clean installation
+      - name: Verify the installed artifact
         run: |
           set -Eeuo pipefail
           test_prefix="${RUNNER_TEMP}/conda-package-test"
@@ -117,9 +123,13 @@ jobs:
           conda create -y -p "${test_prefix}" --override-channels \
             "${channel_arguments[@]}" \
             "python=${{ inputs.python_version }}" "${{ inputs.package_name }}"
-          if [ -n "${{ inputs.test_import }}" ]; then
-            cd "${RUNNER_TEMP}"
+          cd "${RUNNER_TEMP}"
+          if [ -n "${{ inputs.test_command }}" ]; then
+            conda run -p "${test_prefix}" bash -c "${{ inputs.test_command }}"
+          elif [ -n "${{ inputs.test_import }}" ]; then
             conda run -p "${test_prefix}" python -c "import ${{ inputs.test_import }}"
+          else
+            echo "No installed-package verification command was configured."
           fi
 
       - name: Upload built package
