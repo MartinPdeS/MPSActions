@@ -27,7 +27,7 @@ on:
         default: false
 
       deploy-pages:
-        description: Whether to deploy the built documentation to GitHub Pages.
+        description: Whether to publish documentation updates to the configured Pages source branch.
         required: false
         type: boolean
         default: true
@@ -414,18 +414,11 @@ jobs:
 
     permissions:
       contents: write
-      pages: write
-      id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     env:
       PACKAGE_NAME: ${{ inputs.package-name }}
       DOCUMENTATION_BRANCH: documentation_page
       GENERATED_DOCUMENTATION_DIRECTORY: /tmp/generated_documentation_for_branch_update
-      PAGES_SITE_DIRECTORY: /tmp/pages_site
       tag: ${{ needs.build_documentation.outputs.tag }}
 
     steps:
@@ -434,64 +427,6 @@ jobs:
         with:
           name: generated-documentation
           path: ${{ env.GENERATED_DOCUMENTATION_DIRECTORY }}
-
-      - name: Debug downloaded generated documentation
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== deploy job context ====="
-          echo "repository:        ${{ github.repository }}"
-          echo "event_name:        ${{ github.event_name }}"
-          echo "workflow ref:      ${{ github.ref }}"
-          echo "workflow ref name: ${{ github.ref_name }}"
-          echo "workflow ref type: ${{ github.ref_type }}"
-          echo "workflow sha:      ${{ github.sha }}"
-          echo "package name:      ${PACKAGE_NAME}"
-          echo "tag:               ${tag}"
-          echo
-
-          echo "===== downloaded generated documentation ====="
-          echo "directory:"
-          echo "${GENERATED_DOCUMENTATION_DIRECTORY}"
-          echo
-
-          test -d "${GENERATED_DOCUMENTATION_DIRECTORY}"
-          test -f "${GENERATED_DOCUMENTATION_DIRECTORY}/index.html"
-
-          echo "top-level directories:"
-          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -printf "%f\n" \
-            | sort || true
-          echo
-
-          echo "top-level files:"
-          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
-            -maxdepth 1 \
-            -type f \
-            -printf "%f\n" \
-            | sort || true
-          echo
-
-          echo "html file count:"
-          find "${GENERATED_DOCUMENTATION_DIRECTORY}" -type f -name "*.html" | wc -l
-          echo
-
-          echo "all file count:"
-          find "${GENERATED_DOCUMENTATION_DIRECTORY}" -type f | wc -l
-          echo
-
-          echo "directory size:"
-          du -sh "${GENERATED_DOCUMENTATION_DIRECTORY}"
-          echo
-
-          echo "index.html files:"
-          find "${GENERATED_DOCUMENTATION_DIRECTORY}" \
-            -type f \
-            -name "index.html" \
-            | sort || true
 
       - name: Checkout documentation branch
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -995,158 +930,3 @@ jobs:
           echo "===== final latest directory ====="
           test -f docs/latest/index.html
           find docs/latest -maxdepth 3 -type f | sort | head -160 || true
-
-      - name: Prepare Pages payload
-        run: |
-          set -Eeuo pipefail
-
-          rm -rf "${PAGES_SITE_DIRECTORY}"
-          mkdir -p "${PAGES_SITE_DIRECTORY}"
-
-          cp index.html "${PAGES_SITE_DIRECTORY}/"
-          cp version_switcher.json "${PAGES_SITE_DIRECTORY}/"
-
-          if [ -f .nojekyll ]; then
-            cp .nojekyll "${PAGES_SITE_DIRECTORY}/"
-          else
-            touch "${PAGES_SITE_DIRECTORY}/.nojekyll"
-          fi
-
-          cp -a docs "${PAGES_SITE_DIRECTORY}/"
-
-          echo "===== Pages payload verification ====="
-          test -f "${PAGES_SITE_DIRECTORY}/index.html"
-          test -f "${PAGES_SITE_DIRECTORY}/version_switcher.json"
-          test -f "${PAGES_SITE_DIRECTORY}/.nojekyll"
-          test -f "${PAGES_SITE_DIRECTORY}/docs/${tag}/index.html"
-          test -f "${PAGES_SITE_DIRECTORY}/docs/latest/index.html"
-
-          payload_versioned_html_count="$(find "${PAGES_SITE_DIRECTORY}/docs/${tag}" -type f -name "*.html" | wc -l | tr -d ' ')"
-          payload_latest_html_count="$(find "${PAGES_SITE_DIRECTORY}/docs/latest" -type f -name "*.html" | wc -l | tr -d ' ')"
-
-          echo "payload_versioned_html_count=${payload_versioned_html_count}"
-          echo "payload_latest_html_count=${payload_latest_html_count}"
-
-          if [ "${payload_versioned_html_count}" -eq 0 ]; then
-            echo "No HTML files found in payload versioned docs."
-            exit 1
-          fi
-
-          if [ "${payload_latest_html_count}" -eq 0 ]; then
-            echo "No HTML files found in payload latest docs."
-            exit 1
-          fi
-
-          echo
-          echo "payload directory:"
-          echo "${PAGES_SITE_DIRECTORY}"
-          echo
-
-          echo "payload size:"
-          du -sh "${PAGES_SITE_DIRECTORY}"
-          echo
-
-          echo "payload file count:"
-          find "${PAGES_SITE_DIRECTORY}" -type f | wc -l
-          echo
-
-          echo "payload html count:"
-          find "${PAGES_SITE_DIRECTORY}" -type f -name "*.html" | wc -l
-
-      - name: Debug Pages payload
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== payload version_switcher.json ====="
-          cat "${PAGES_SITE_DIRECTORY}/version_switcher.json"
-          echo
-
-          echo "===== payload index files ====="
-          find "${PAGES_SITE_DIRECTORY}" -name index.html | sort || true
-          echo
-
-          echo "===== payload docs directories ====="
-          find "${PAGES_SITE_DIRECTORY}/docs" \
-            -mindepth 1 \
-            -maxdepth 1 \
-            -type d \
-            -printf "%f\n" \
-            | sort -V || true
-          echo
-
-          echo "===== payload expected version sample ====="
-          find "${PAGES_SITE_DIRECTORY}/docs/${tag}" \
-            -maxdepth 4 \
-            -type f \
-            | sort \
-            | head -240 || true
-          echo
-
-          echo "===== payload latest sample ====="
-          find "${PAGES_SITE_DIRECTORY}/docs/latest" \
-            -maxdepth 4 \
-            -type f \
-            | sort \
-            | head -240 || true
-
-      - name: Set up GitHub Pages
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
-        with:
-          path: ${{ env.PAGES_SITE_DIRECTORY }}
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
-
-      - name: Probe live site after deploy
-        run: |
-          set -Eeuo pipefail
-
-          base_url="https://martinpdes.github.io/${PACKAGE_NAME}"
-
-          echo "===== deployment output ====="
-          echo "page_url=${{ steps.deployment.outputs.page_url }}"
-          echo "base_url=${base_url}"
-          echo "tag=${tag}"
-          echo
-
-          echo "Waiting briefly before probing live GitHub Pages..."
-          sleep 20
-
-          echo
-          echo "===== live version_switcher.json ====="
-          curl -fL "${base_url}/version_switcher.json" || true
-          echo
-
-          echo
-          echo "===== live root ====="
-          curl -IL "${base_url}/" || true
-          echo
-
-          echo
-          echo "===== live latest ====="
-          curl -IL "${base_url}/docs/latest/" || true
-          echo
-
-          echo
-          echo "===== live latest index ====="
-          curl -IL "${base_url}/docs/latest/index.html" || true
-          echo
-
-          echo
-          echo "===== live tag ====="
-          curl -IL "${base_url}/docs/${tag}/" || true
-          echo
-
-          echo
-          echo "===== live tag index ====="
-          curl -IL "${base_url}/docs/${tag}/index.html" || true
-
-      - name: Print deployment URL
-        run: |
-          set -Eeuo pipefail
-
-          echo "page_url=${{ steps.deployment.outputs.page_url }}"
