@@ -1,0 +1,106 @@
+name: Publish Python Package Release
+
+on:
+  workflow_call:
+    inputs:
+      pypi_python_version:
+        required: true
+        type: string
+      pypi_build_linux:
+        required: true
+        type: boolean
+      pypi_build_macos:
+        required: true
+        type: boolean
+      pypi_build_windows:
+        required: true
+        type: boolean
+      pypi_apt_package:
+        required: false
+        type: string
+        default: ""
+      pypi_brew_package:
+        required: false
+        type: string
+        default: ""
+      pypi_mingw_package:
+        required: false
+        type: string
+        default: ""
+      conda_python_versions:
+        required: true
+        type: string
+      conda_os_list:
+        required: true
+        type: string
+      conda_package_name:
+        required: true
+        type: string
+      conda_recipe_path:
+        required: false
+        type: string
+        default: "."
+      conda_test_import:
+        required: false
+        type: string
+        default: ""
+      conda_test_command:
+        required: false
+        type: string
+        default: ""
+      conda_apt_package:
+        required: false
+        type: string
+        default: ""
+      conda_brew_package:
+        required: false
+        type: string
+        default: ""
+      conda_channels:
+        required: false
+        type: string
+        default: "martinpdes,conda-forge"
+      conda_max_artifact_size_mb:
+        required: false
+        type: number
+        default: 500
+      conda_upload_user:
+        required: false
+        type: string
+        default: "martinpdes"
+    secrets:
+      PYPI_API_TOKEN:
+        required: true
+      ANACONDA_API_TOKEN:
+        required: true
+
+jobs:
+  pypi:
+    uses: MartinPdeS/MPSActions/.github/workflows/publish_compiled_package_to_PyPi.yml@v2
+    with:
+      python-version: ${{ inputs.pypi_python_version }}
+      build-Linux: ${{ inputs.pypi_build_linux }}
+      build-macOS: ${{ inputs.pypi_build_macos }}
+      build-Windows: ${{ inputs.pypi_build_windows }}
+      apt-package: ${{ inputs.pypi_apt_package }}
+      brew-package: ${{ inputs.pypi_brew_package }}
+      mingw-package: ${{ inputs.pypi_mingw_package }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  conda:
+    uses: MartinPdeS/MPSActions/.github/workflows/publish_compiled_package_to_anaconda.yml@v2
+    with:
+      python_versions: ${{ inputs.conda_python_versions }}
+      os_list: ${{ inputs.conda_os_list }}
+      package_name: ${{ inputs.conda_package_name }}
+      recipe_path: ${{ inputs.conda_recipe_path }}
+      test_import: ${{ inputs.conda_test_import }}
+      test_command: ${{ inputs.conda_test_command }}
+      apt_package: ${{ inputs.conda_apt_package }}
+      brew_package: ${{ inputs.conda_brew_package }}
+      conda_channels: ${{ inputs.conda_channels }}
+      max_artifact_size_mb: ${{ inputs.conda_max_artifact_size_mb }}
+      conda_upload_user: ${{ inputs.conda_upload_user }}
+    secrets:
+      ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
