@@ -87,7 +87,7 @@ jobs:
             env:
                 MY_SECRET: ${{ inputs.password }}
             with:
-                packages_dir: ./dist
+                packages-dir: ./dist
                 user: __token__
                 password: "${{ secrets.PYPI_API_TOKEN }}"
                 verbose: true
