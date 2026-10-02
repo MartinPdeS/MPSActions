@@ -27,6 +27,33 @@ For maximum supply-chain reproducibility, pin a full commit SHA instead. A
 release tag such as ``v1.0.0`` is immutable; the ``v1`` tag advances only for
 backward-compatible fixes and features.
 
+Shared Python CI setup
+----------------------
+
+``actions/setup-python`` is a composite action for test and lint jobs. It
+checks out the calling repository, selects Python, and installs the caller's
+CI dependencies. Keep test and lint commands as normal steps in the caller:
+
+.. code-block:: yaml
+
+   steps:
+     - uses: MartinPdeS/MPSActions/actions/setup-python@<full-commit-sha>
+       with:
+         python-version: "3.11"
+         install-command: python -m pip install --upgrade pip && python -m pip install -e ".[testing,dev]"
+     - run: python -m ruff check example_package tests
+     - run: python -m pytest
+
+Pin the action to a full commit SHA. ``install-command`` is executable Bash
+supplied by trusted workflow code; do not populate it from issue text or other
+untrusted event data. Its default installs the project with ``.[testing]``.
+Optional inputs preserve checkout history (``fetch-depth``), submodules
+(``submodules``), and setup-python caching (``cache`` and
+``cache-dependency-path``). Defaults match checkout and setup-python defaults.
+Python matrices, runner selection, environment variables, and package-specific
+checks remain in the calling workflow. The action's smoke tests cover Linux,
+macOS, Windows, and propagation of installation failures.
+
 Available workflows
 -------------------
 

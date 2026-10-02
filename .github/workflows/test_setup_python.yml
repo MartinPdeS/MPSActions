@@ -1,0 +1,73 @@
+name: Test Python setup action
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - actions/setup-python/**
+      - .github/workflows/test_setup_python.yml
+  pull_request:
+    paths:
+      - actions/setup-python/**
+      - .github/workflows/test_setup_python.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.13"]
+    env:
+      SETUP_TEST_ENV: preserved
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: ./actions/setup-python
+        with:
+          python-version: ${{ matrix.python-version }}
+          fetch-depth: "0"
+          submodules: "true"
+          cache: pip
+          cache-dependency-path: actions/setup-python/test-requirements.txt
+          install-command: |
+            python -m pip install --upgrade pip
+            python -m pip install -r actions/setup-python/test-requirements.txt
+      - name: Verify caller checkout, interpreter, dependencies, and environment
+        shell: bash
+        env:
+          EXPECTED_PYTHON: ${{ matrix.python-version }}
+        run: |
+          python - <<'PYTHON'
+          import os
+          import pathlib
+          import sys
+          import yaml
+
+          assert '.'.join(map(str, sys.version_info[:2])) == os.environ['EXPECTED_PYTHON']
+          assert pathlib.Path('actions/setup-python/action.yml').is_file()
+          assert os.environ['SETUP_TEST_ENV'] == 'preserved'
+          assert yaml.safe_load('installed: true')['installed'] is True
+          PYTHON
+          test "$(git rev-parse --is-shallow-repository)" = false
+
+  install-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - id: setup
+        uses: ./actions/setup-python
+        continue-on-error: true
+        with:
+          python-version: "3.11"
+          install-command: |
+            exit 7
+            echo "This must not run"
+      - name: Verify installation failures fail the action
+        env:
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
+        run: test "$SETUP_OUTCOME" = failure

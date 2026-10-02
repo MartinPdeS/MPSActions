@@ -1,0 +1,43 @@
+name: Set up Python project
+description: Check out the caller, configure Python, and install its CI dependencies.
+inputs:
+  python-version:
+    description: Python version or version expression supported by setup-python.
+    required: true
+  install-command:
+    description: Bash commands from the calling workflow to install CI dependencies.
+    required: false
+    default: python -m pip install --upgrade pip && python -m pip install -e ".[testing]"
+  fetch-depth:
+    description: Number of commits to fetch; use 0 for complete history.
+    required: false
+    default: "1"
+  submodules:
+    description: Whether to fetch submodules (false, true, or recursive).
+    required: false
+    default: "false"
+  cache:
+    description: Optional setup-python package cache (pip, pipenv, or poetry).
+    required: false
+    default: ""
+  cache-dependency-path:
+    description: Optional file paths used to compute the dependency cache key.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Check out caller repository
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+        submodules: ${{ inputs.submodules }}
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+    - name: Install CI dependencies
+      shell: bash
+      run: ${{ inputs.install-command }}
