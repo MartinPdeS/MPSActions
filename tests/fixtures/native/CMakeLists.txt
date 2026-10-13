@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(mps_fixture_native LANGUAGES CXX)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(pybind11 CONFIG REQUIRED)
+pybind11_add_module(_core core.cpp)
+install(TARGETS _core LIBRARY DESTINATION mps_fixture_native RUNTIME DESTINATION mps_fixture_native)

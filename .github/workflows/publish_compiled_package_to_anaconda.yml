@@ -1,6 +1,5 @@
 name: Build and Upload Conda Package
-
-on:
+'on':
   workflow_call:
     inputs:
       python_versions:
@@ -19,29 +18,29 @@ on:
         description: Deprecated Python import target for installed-package verification.
         type: string
         required: false
-        default: ""
+        default: ''
       test_command:
         description: Optional command to run in the clean Conda test environment.
         type: string
         required: false
-        default: ""
+        default: ''
       apt_package:
         required: false
         type: string
-        default: ""
+        default: ''
       brew_package:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_channels:
         required: false
         type: string
-        default: "martinpdes,conda-forge"
+        default: martinpdes,conda-forge
       recipe_path:
         description: Path to the Conda recipe directory or meta.yaml file.
         required: false
         type: string
-        default: "."
+        default: .
       max_artifact_size_mb:
         description: Maximum permitted Conda archive size in MiB.
         required: false
@@ -50,70 +49,98 @@ on:
       conda_upload_user:
         required: false
         type: string
-        default: "martinpdes"
+        default: martinpdes
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      tools_python_version:
+        type: string
+        required: false
+        default: '3.11'
+      conda_build_version:
+        type: string
+        required: false
+        default: <26
+      miniforge_version:
+        type: string
+        required: false
+        default: 26.7.2-0
+      debug:
+        type: boolean
+        required: false
+        default: false
     secrets:
       ANACONDA_API_TOKEN:
         required: true
-
+permissions:
+  contents: read
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      identities: ${{ steps.plan.outputs.identities }}
+    steps:
+    - name: Plan Conda artifacts
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os
+        ids = ['conda-package-' + runner + '-py' + version for runner in json.loads(os.environ['RUNNERS']) for version in json.loads(os.environ['PYTHONS'])]
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('identities=' + json.dumps(ids) + '\n')
+        PYTHON
+      env:
+        RUNNERS: ${{ inputs.os_list }}
+        PYTHONS: ${{ inputs.python_versions }}
+      id: plan
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJson(inputs.os_list) }}
-        python: ${{ fromJson(inputs.python_versions) }}
-    uses: MartinPdeS/MPSActions/.github/workflows/build_conda_package.yml@v6
+    needs: plan
+    uses: ./.github/workflows/build_conda_matrix.yml
     with:
-      os: ${{ matrix.os }}
-      python_version: ${{ matrix.python }}
+      python_versions: ${{ inputs.python_versions }}
+      os_list: ${{ inputs.os_list }}
       package_name: ${{ inputs.package_name }}
       test_import: ${{ inputs.test_import }}
       test_command: ${{ inputs.test_command }}
-      max_artifact_size_mb: ${{ inputs.max_artifact_size_mb }}
       apt_package: ${{ inputs.apt_package }}
       brew_package: ${{ inputs.brew_package }}
       conda_channels: ${{ inputs.conda_channels }}
       recipe_path: ${{ inputs.recipe_path }}
-
+      max_artifact_size_mb: ${{ inputs.max_artifact_size_mb }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      tools_python_version: ${{ inputs.tools_python_version }}
+      conda_build_version: ${{ inputs.conda_build_version }}
+      miniforge_version: ${{ inputs.miniforge_version }}
+      debug: ${{ inputs.debug }}
+  validate:
+    needs:
+    - plan
+    - build
+    uses: ./.github/workflows/validate_release.yml
+    with:
+      validate_pypi: false
+      conda_identities: ${{ needs.plan.outputs.identities }}
+      package_name: ${{ inputs.package_name }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
   publish:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
-        with:
-          miniforge-version: latest
-          auto-update-conda: false
-          auto-activate: true
-          activate-environment: base
-          channels: ${{ inputs.conda_channels }}
-          channel-priority: strict
-          conda-remove-defaults: true
-
-      - name: Install Anaconda client
-        run: |
-          set -Eeuo pipefail
-          conda install -n base -y --override-channels -c conda-forge anaconda-client
-          conda run -n base anaconda --help >/dev/null
-
-      - name: Download verified packages
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-        with:
-          pattern: conda-package-*
-          path: conda-build-artifacts
-          merge-multiple: true
-
-      - name: Upload packages to Anaconda
-        env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
-        run: |
-          set -Eeuo pipefail
-          mapfile -t packages < <(find conda-build-artifacts -type f \( -name '*.conda' -o -name '*.tar.bz2' \))
-          [ "${#packages[@]}" -gt 0 ] || { echo "No Conda packages were downloaded."; exit 1; }
-
-          for package_path in "${packages[@]}"; do
-            conda run -n base anaconda --token "${ANACONDA_API_TOKEN}" upload \
-              --user "${{ inputs.conda_upload_user }}" \
-              --force "${package_path}"
-          done
+    needs:
+    - plan
+    - validate
+    uses: ./.github/workflows/publish_distributions.yml
+    with:
+      registry: conda
+      artifact_identities: ${{ needs.plan.outputs.identities }}
+      conda_upload_user: ${{ inputs.conda_upload_user }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+    secrets:
+      ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}

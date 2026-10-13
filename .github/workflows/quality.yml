@@ -1,0 +1,70 @@
+name: Workflow and helper checks
+'on':
+  push:
+    branches:
+    - master
+  pull_request: {}
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  helpers:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - macos-latest
+        - windows-latest
+        python:
+        - '3.11'
+        - '3.14'
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ matrix.python }}
+    - name: Install test dependencies
+      run: |
+        set -Eeuo pipefail
+        python -m pip install "pytest>=8,<10" "PyYAML>=6,<7" "conda-package-handling>=2.4,<3"
+    - name: Test release helpers
+      run: |
+        set -Eeuo pipefail
+        python -m pytest tests --ignore=tests/fixtures -q
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.11'
+    - name: Install YAML parser and ShellCheck
+      run: |
+        set -Eeuo pipefail
+        python -m pip install "PyYAML>=6,<7"
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+    - name: Install pinned actionlint
+      run: |
+        set -Eeuo pipefail
+        curl --fail --location --retry 3 --retry-delay 10 \
+          https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+          --output "$RUNNER_TEMP/actionlint.tar.gz"
+        printf '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  %s\n' "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+    - name: Lint every workflow and shell script
+      run: |
+        set -Eeuo pipefail
+        python tools/lint_workflows.py
+defaults:
+  run:
+    shell: bash

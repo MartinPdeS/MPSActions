@@ -1,4 +1,4 @@
-on:
+'on':
   workflow_call:
     secrets:
       PYPI_API_TOKEN:
@@ -18,167 +18,127 @@ on:
         default: false
       brew-package:
         type: string
-        default: ""
+        default: ''
       apt-package:
         type: string
-        default: ""
+        default: ''
       mingw-package:
         type: string
-        default: ""
-
+        default: ''
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      linux_runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+      macos_runner:
+        type: string
+        required: false
+        default: macos-latest
+      windows_runner:
+        type: string
+        required: false
+        default: windows-latest
+      macos_deployment_target:
+        type: string
+        required: false
+        default: '26.0'
+      xcode_version:
+        type: string
+        required: false
+        default: ''
+      macos_install_gcc:
+        type: boolean
+        required: false
+        default: true
+      macos_install_fortran:
+        type: boolean
+        required: false
+        default: true
+      cibuildwheel_version:
+        type: string
+        required: false
+        default: 4.2.0
+      project-directory:
+        type: string
+        required: false
+        default: .
+      debug:
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
 jobs:
-
-  linux:
-    if: ${{ inputs.build-Linux }}
+  plan:
     runs-on: ubuntu-latest
-
+    outputs:
+      identities: ${{ steps.plan.outputs.identities }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - name: Install apt packages
-        if: ${{ inputs.apt-package != '' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ inputs.apt-package }}
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074
-        env:
-          CC: gcc
-          CXX: g++
-        with:
-          output-dir: dist
-
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: linux_wheels
-          path: dist/*
-
-  macos:
-    if: ${{ inputs.build-macOS }}
-    runs-on: macos-latest
-
-    steps:
-      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
-        with:
-          xcode-version: "26.6"
-
-      - name: Install GCC
-        run: |
-          brew update
-          brew install gcc
-     
-      - name: "Setup GNU Fortran"
-        id: setup-fortran
-        uses: fortran-lang/setup-fortran@3367da2fee129ed4b7e4ba439ea3394ca40e396b
-          
-
-      - name: Install brew packages
-        if: ${{ inputs.brew-package != '' }}
-        run: |
-          brew install ${{ inputs.brew-package }}
-
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074
-        env:
-          PYVISTA_OFF_SCREEN: "true"
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "3.3"
-          MACOSX_DEPLOYMENT_TARGET: "26.0"
-        with:
-          output-dir: dist
-
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: macos_wheels
-          path: dist/*
-
-  windows:
-    if: ${{ inputs.build-Windows }}
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
-        if: ${{ inputs.mingw-package != '' }}
-        id: msys2
-        with:
-          msystem: MINGW64
-          install: ${{ inputs.mingw-package }}
-          path-type: inherit
-          # A fresh setup avoids transient GitHub cache-service failures.
-          cache: false
-
-      - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67
-
-      - name: Add MSYS2 to PATH
-        run: |
-          echo "${{ steps.msys2.outputs.msys2-location }}/mingw64/bin" >> $env:GITHUB_PATH
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074
-        env:
-          CMAKE_ARGS: "-DPKG_CONFIG_EXECUTABLE=${{ steps.msys2.outputs.msys2-location }}/mingw64/bin/pkg-config.exe"
-          CMAKE_GENERATOR: Ninja
-        with:
-          output-dir: dist
-
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: windows_wheels
-          path: dist/*
-
+    - name: Plan wheel artifacts
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os
+        ids = ['wheels-' + p for p in ('linux', 'macos', 'windows') if os.environ[p.upper()] == 'true']
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('identities=' + json.dumps(ids) + '\n')
+        PYTHON
+      env:
+        LINUX: ${{ inputs.build-Linux }}
+        MACOS: ${{ inputs.build-macOS }}
+        WINDOWS: ${{ inputs.build-Windows }}
+      id: plan
+  build:
+    needs: plan
+    uses: ./.github/workflows/build_wheels.yml
+    with:
+      python_version: ${{ inputs.python-version }}
+      build_linux: ${{ inputs.build-Linux }}
+      build_macos: ${{ inputs.build-macOS }}
+      build_windows: ${{ inputs.build-Windows }}
+      apt_package: ${{ inputs.apt-package }}
+      brew_package: ${{ inputs.brew-package }}
+      mingw_package: ${{ inputs.mingw-package }}
+      project_directory: ${{ inputs.project-directory }}
+      linux_runner: ${{ inputs.linux_runner }}
+      macos_runner: ${{ inputs.macos_runner }}
+      windows_runner: ${{ inputs.windows_runner }}
+      macos_deployment_target: ${{ inputs.macos_deployment_target }}
+      xcode_version: ${{ inputs.xcode_version }}
+      macos_install_gcc: ${{ inputs.macos_install_gcc }}
+      macos_install_fortran: ${{ inputs.macos_install_fortran }}
+      cibuildwheel_version: ${{ inputs.cibuildwheel_version }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      debug: ${{ inputs.debug }}
+  validate:
+    needs:
+    - plan
+    - build
+    uses: ./.github/workflows/validate_release.yml
+    with:
+      validate_conda: false
+      wheel_identities: ${{ needs.plan.outputs.identities }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
   publish:
-    if: >
-      always() &&
-      startsWith(github.ref, 'refs/tags/') &&
-      !cancelled() &&
-      (needs.linux.result == 'success' || needs.linux.result == 'skipped') &&
-      (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
-      (needs.windows.result == 'success' || needs.windows.result == 'skipped')
-    needs: [linux, macos, windows]
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - run: |
-          python -m pip install -U pip
-          python -m pip install twine
-
-      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-        with:
-          pattern: "*_wheels"
-          path: dist
-          merge-multiple: true
-
-      - name: Validate distributions
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          shopt -s nullglob
-          distributions=(dist/*.whl dist/*.tar.gz)
-          [ "${#distributions[@]}" -gt 0 ] || { echo "No distributions were downloaded." >&2; exit 1; }
-          python -m twine check "${distributions[@]}"
-
-      - name: Release to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
-        with:
-          packages-dir: dist
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          verbose: true
+    needs:
+    - plan
+    - validate
+    uses: ./.github/workflows/publish_distributions.yml
+    with:
+      registry: pypi
+      artifact_identities: ${{ needs.plan.outputs.identities }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

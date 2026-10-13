@@ -1,0 +1,122 @@
+name: Build and Upload Conda Package
+'on':
+  workflow_call:
+    inputs:
+      python_versions:
+        description: JSON list of Python versions to build.
+        required: true
+        type: string
+      os_list:
+        description: JSON list of GitHub Actions runners.
+        required: true
+        type: string
+      package_name:
+        description: Name of the Conda package to install for verification.
+        required: true
+        type: string
+      test_import:
+        description: Deprecated Python import target for installed-package verification.
+        type: string
+        required: false
+        default: ''
+      test_command:
+        description: Optional command to run in the clean Conda test environment.
+        type: string
+        required: false
+        default: ''
+      apt_package:
+        required: false
+        type: string
+        default: ''
+      brew_package:
+        required: false
+        type: string
+        default: ''
+      conda_channels:
+        required: false
+        type: string
+        default: martinpdes,conda-forge
+      recipe_path:
+        description: Path to the Conda recipe directory or meta.yaml file.
+        required: false
+        type: string
+        default: .
+      max_artifact_size_mb:
+        description: Maximum permitted Conda archive size in MiB.
+        required: false
+        type: number
+        default: 500
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      tools_python_version:
+        type: string
+        required: false
+        default: '3.11'
+      conda_build_version:
+        type: string
+        required: false
+        default: <26
+      miniforge_version:
+        type: string
+        required: false
+        default: 26.7.2-0
+      debug:
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Validate Conda matrix
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os, re
+        versions = json.loads(os.environ['PYTHON_VERSIONS'])
+        runners = json.loads(os.environ['RUNNERS'])
+        if not versions or not runners or len(set(versions)) != len(versions) or len(set(runners)) != len(runners):
+            raise SystemExit('Conda matrices must be nonempty and unique.')
+        if any(not re.fullmatch(r'3\.\d+', value) for value in versions):
+            raise SystemExit('Conda Python versions must look like 3.14.')
+        if any(not re.fullmatch(r'(?:ubuntu|macos|windows)-[A-Za-z0-9.-]+', value) for value in runners):
+            raise SystemExit('Use a supported Linux, macOS, or Windows runner label.')
+        PYTHON
+      env:
+        PYTHON_VERSIONS: ${{ inputs.python_versions }}
+        RUNNERS: ${{ inputs.os_list }}
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(inputs.os_list) }}
+        python: ${{ fromJson(inputs.python_versions) }}
+    uses: ./.github/workflows/build_conda_package.yml
+    with:
+      os: ${{ matrix.os }}
+      python_version: ${{ matrix.python }}
+      package_name: ${{ inputs.package_name }}
+      test_import: ${{ inputs.test_import }}
+      test_command: ${{ inputs.test_command }}
+      max_artifact_size_mb: ${{ inputs.max_artifact_size_mb }}
+      apt_package: ${{ inputs.apt_package }}
+      brew_package: ${{ inputs.brew_package }}
+      conda_channels: ${{ inputs.conda_channels }}
+      recipe_path: ${{ inputs.recipe_path }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      tools_python_version: ${{ inputs.tools_python_version }}
+      conda_build_version: ${{ inputs.conda_build_version }}
+      miniforge_version: ${{ inputs.miniforge_version }}
+      debug: ${{ inputs.debug }}
+    needs: plan

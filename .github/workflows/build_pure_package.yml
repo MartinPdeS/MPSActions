@@ -1,0 +1,117 @@
+name: Build and verify a pure Python package
+'on':
+  workflow_call:
+    inputs:
+      python_version:
+        type: string
+        required: false
+        default: '3.11'
+      runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+      project_directory:
+        type: string
+        required: false
+        default: .
+      test_command:
+        type: string
+        required: false
+        default: ''
+      test_import:
+        type: string
+        required: false
+        default: ''
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      artifact_identity:
+        type: string
+        required: false
+        default: wheels-pure
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    env:
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      PROJECT_DIRECTORY: ${{ inputs.project_directory }}
+      TEST_COMMAND: ${{ inputs.test_command }}
+      TEST_IMPORT: ${{ inputs.test_import }}
+      MPLBACKEND: Agg
+      ARTIFACT_IDENTITY: ${{ inputs.artifact_identity }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Load release helpers
+      uses: $/actions/release-tools
+    - name: Install build tools
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install build twine
+    - name: Test source and build distributions
+      run: |
+        set -Eeuo pipefail
+        cd "$PROJECT_DIRECTORY"
+        python "$MPS_TOOLS/retry.py" -- python -m pip install -e ".[testing]"
+        python -m pytest
+        python -m build --outdir "$GITHUB_WORKSPACE/dist"
+    - name: Test installed wheel outside checkout
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import os, subprocess, sys, tempfile, venv
+        from pathlib import Path
+        root = Path('dist').resolve()
+        wheels = list(root.glob('*.whl'))
+        if len(wheels) != 1:
+            raise SystemExit('Expected exactly one pure-Python wheel.')
+        with tempfile.TemporaryDirectory(dir=os.environ['RUNNER_TEMP']) as temporary:
+            prefix = Path(temporary) / 'venv'
+            venv.EnvBuilder(with_pip=True).create(prefix)
+            executable = prefix / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+            subprocess.run([sys.executable, os.environ['MPS_TOOLS'] + '/retry.py', '--',
+                            str(executable), '-m', 'pip', 'install', str(wheels[0]) + '[testing]'], check=True)
+            environment = dict(os.environ)
+            environment['PATH'] = str(executable.parent) + os.pathsep + environment['PATH']
+            command = os.environ['TEST_COMMAND']
+            if command:
+                subprocess.run(['bash', '-c', command], cwd=temporary, env=environment, check=True)
+            else:
+                name = os.environ['TEST_IMPORT']
+                if not name:
+                    import sys
+                    sys.path.insert(0, os.environ['MPS_TOOLS'])
+                    from artifacts import metadata
+                    name = metadata(wheels[0])['name'].replace('-', '_')
+                subprocess.run([str(executable), '-c', 'import importlib; importlib.import_module(' + repr(name) + ')'],
+                               cwd=temporary, env=environment, check=True)
+        PYTHON
+    - name: Validate pure distributions
+      run: |
+        set -Eeuo pipefail
+        python -m twine check dist/*.whl dist/*.tar.gz
+        python "$MPS_TOOLS/artifacts.py" manifest --root dist --registry pypi --identity "$ARTIFACT_IDENTITY"
+        python "$MPS_TOOLS/artifacts.py" verify --root dist --registry pypi
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: ${{ inputs.artifact_identity }}
+        path: dist/*
+        if-no-files-found: error

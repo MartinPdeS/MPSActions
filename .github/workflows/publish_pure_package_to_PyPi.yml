@@ -1,6 +1,5 @@
 name: Build and Upload Wheel
-
-on:
+'on':
   workflow_call:
     inputs:
       python-version:
@@ -10,84 +9,58 @@ on:
         description: Optional command to run after installing the wheel in a fresh environment.
         required: false
         type: string
-        default: ""
+        default: ''
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+      project_directory:
+        type: string
+        required: false
+        default: .
+      test_import:
+        type: string
+        required: false
+        default: ''
     secrets:
       PYPI_API_TOKEN:
         required: true
-
-
+permissions:
+  contents: read
 jobs:
-    ManyLinux_x86_64:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-          with:
-            fetch-depth: 0
-            submodules: 'true'
-
-        - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-          with:
-              python-version: ${{ inputs.python-version }}
-
-        - name: "Running unittests and building wheel"
-          shell: bash
-          run: |
-              python -m pip install --upgrade pip
-              python -m pip install wheel build
-              python -m pip install -e .[testing]
-              pytest -s
-              python -m build
-
-        - name: Test built wheel in isolation
-          if: inputs.test-command != ''
-          shell: bash
-          run: |
-              set -Eeuo pipefail
-              test_directory="$(mktemp -d)"
-              python -m venv "${test_directory}/venv"
-              "${test_directory}/venv/bin/python" -m pip install dist/*.whl
-              cd "${test_directory}"
-              PATH="${test_directory}/venv/bin:${PATH}" bash -c "${{ inputs.test-command }}"
-
-        - name: "Upload: Wheel Artifact"
-          uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-          with:
-              name: wheel-artifact
-              path: ./dist/*
-
-    publish_wheel:
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        needs: [ManyLinux_x86_64]
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-            with:
-                fetch-depth: 0
-                submodules: 'true'
-
-          - name: "Set-up: Python ${{ inputs.python-version }}"
-            uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-            with:
-                python-version: "${{ inputs.python-version }}"
-
-          - name: "Install: Dependencies"
-            shell: bash
-            run: |
-                python -m pip install --upgrade pip
-                python -m pip install twine
-
-          - name: "Download: Wheel Artifact"
-            uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-            with:
-                name: wheel-artifact
-                path: ./dist
-
-          - name: "Publish: Wheel"
-            uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
-            env:
-                MY_SECRET: ${{ inputs.password }}
-            with:
-                packages-dir: ./dist
-                user: __token__
-                password: "${{ secrets.PYPI_API_TOKEN }}"
-                verbose: true
+  build:
+    uses: ./.github/workflows/build_pure_package.yml
+    with:
+      python_version: ${{ inputs.python-version }}
+      test_command: ${{ inputs.test-command }}
+      runner: ${{ inputs.runner }}
+      project_directory: ${{ inputs.project_directory }}
+      test_import: ${{ inputs.test_import }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+  validate:
+    needs: build
+    uses: ./.github/workflows/validate_release.yml
+    with:
+      validate_conda: false
+      wheel_identities: '["wheels-pure"]'
+  publish:
+    needs: validate
+    uses: ./.github/workflows/publish_distributions.yml
+    with:
+      registry: pypi
+      artifact_identities: '["wheels-pure"]'
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

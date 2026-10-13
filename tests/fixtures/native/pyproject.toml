@@ -1,0 +1,30 @@
+[build-system]
+requires = ["scikit-build-core>=0.10,<1", "pybind11>=3.0.1,<4"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "mps-fixture-native"
+version = "0.1.0"
+description = "Integration fixture for MPSActions native releases."
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+testing = ["pytest>=8,<10"]
+
+[tool.scikit-build]
+wheel.packages = ["src/mps_fixture_native"]
+
+[tool.cibuildwheel]
+build = ["cp314-*"]
+skip = ["*-musllinux*"]
+test-command = '''python -c "import mps_fixture_native as m; from pathlib import Path; assert m.add(2, 3) == 5; assert 'site-packages' in Path(m.__file__).parts"'''
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+manylinux-x86_64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+archs = ["arm64"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]

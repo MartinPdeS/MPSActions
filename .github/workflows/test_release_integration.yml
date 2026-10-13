@@ -1,0 +1,54 @@
+name: Release integration tests
+'on':
+  push:
+    branches:
+    - master
+  pull_request: {}
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  pure:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - macos-latest
+        - windows-latest
+        python:
+        - '3.11'
+        - '3.14'
+    uses: ./.github/workflows/build_pure_package.yml
+    with:
+      runner: ${{ matrix.os }}
+      python_version: ${{ matrix.python }}
+      project_directory: tests/fixtures/pure
+      artifact_identity: wheels-pure-${{ matrix.os }}-py${{ matrix.python }}
+      test_command: python -c "import mps_fixture_pure as m; from pathlib import Path; assert m.add(2, 3) == 5;
+        assert 'site-packages' in Path(m.__file__).parts"
+  native_wheels:
+    uses: ./.github/workflows/build_wheels.yml
+    with:
+      build_linux: true
+      build_macos: true
+      build_windows: true
+      project_directory: tests/fixtures/native
+  native_conda:
+    uses: ./.github/workflows/build_conda_matrix.yml
+    with:
+      python_versions: '["3.14"]'
+      os_list: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+      package_name: mps-fixture-native
+      recipe_path: tests/fixtures/native/conda.recipe
+      conda_channels: conda-forge
+      test_command: python -c "import mps_fixture_native as m; from pathlib import Path; assert m.add(2, 3) == 5;
+        assert 'site-packages' in Path(m.__file__).parts"
+  documentation:
+    uses: ./.github/workflows/publish_documentation.yml
+    with:
+      python-version: '3.14'
+      package-name: mps-fixture-pure
+      project_directory: tests/fixtures/pure
+      deploy-pages: false
+      fail-on-sphinx-warning: true

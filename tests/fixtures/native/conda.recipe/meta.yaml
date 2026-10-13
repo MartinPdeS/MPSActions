@@ -1,0 +1,24 @@
+package:
+  name: mps-fixture-native
+  version: 0.1.0
+source:
+  path: ..
+build:
+  number: 0
+  script: '{{ PYTHON }} -m pip install . --no-deps --no-build-isolation --config-settings=cmake.args=-GNinja'
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - cmake >=3.20
+    - ninja
+  host:
+    - python {{ PY_VER }}
+    - pip
+    - scikit-build-core >=0.10,<1
+    - pybind11 >=3.0.1,<4
+  run:
+    - python
+    - {{ pin_compatible('python', max_pin='x.x') }}
+test:
+  imports:
+    - mps_fixture_native

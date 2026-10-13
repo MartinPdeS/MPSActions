@@ -1,0 +1,97 @@
+name: Validate release artifacts
+'on':
+  workflow_call:
+    inputs:
+      validate_pypi:
+        type: boolean
+        required: false
+        default: true
+      validate_conda:
+        type: boolean
+        required: false
+        default: true
+      wheel_identities:
+        type: string
+        required: false
+        default: '[]'
+      conda_identities:
+        type: string
+        required: false
+        default: '[]'
+      package_name:
+        type: string
+        required: false
+        default: ''
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      pypi_package_name:
+        type: string
+        required: false
+        default: ''
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      WHEEL_IDENTITIES: ${{ inputs.wheel_identities }}
+      CONDA_IDENTITIES: ${{ inputs.conda_identities }}
+      PACKAGE_NAME: ${{ inputs.package_name }}
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      PYPI_PACKAGE_NAME: ${{ inputs.pypi_package_name }}
+    steps:
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.11'
+    - name: Load release helpers
+      uses: $/actions/release-tools
+    - name: Install Conda archive reader
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install "conda-package-handling>=2.4,<3"
+      if: inputs.validate_conda
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: wheels-*
+        path: dist
+        merge-multiple: true
+      if: inputs.validate_pypi
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: conda-package-*
+        path: conda-build-artifacts
+        merge-multiple: true
+      if: inputs.validate_conda
+    - name: Verify every wheel build
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/artifacts.py" verify --root dist --registry pypi --identities-json "$WHEEL_IDENTITIES" --package "$PYPI_PACKAGE_NAME"
+      if: inputs.validate_pypi
+    - name: Verify every Conda build
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/artifacts.py" verify --root conda-build-artifacts --registry conda --identities-json "$CONDA_IDENTITIES" --package "$PACKAGE_NAME"
+      if: inputs.validate_conda
+    - name: Compare registry versions
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json
+        from pathlib import Path
+        manifests = [json.loads(p.read_text()) for root in ('dist', 'conda-build-artifacts') for p in Path(root).glob('manifest-*.json')]
+        versions = {record['version'] for m in manifests for record in m['files']}
+        if len(versions) != 1:
+            raise SystemExit('PyPI and Conda artifacts disagree on the release version.')
+        PYTHON

@@ -1,0 +1,230 @@
+name: Build and verify native wheels
+'on':
+  workflow_call:
+    inputs:
+      python_version:
+        type: string
+        required: false
+        default: '3.11'
+      build_linux:
+        type: boolean
+        required: false
+        default: false
+      build_macos:
+        type: boolean
+        required: false
+        default: false
+      build_windows:
+        type: boolean
+        required: false
+        default: false
+      apt_package:
+        type: string
+        required: false
+        default: ''
+      brew_package:
+        type: string
+        required: false
+        default: ''
+      mingw_package:
+        type: string
+        required: false
+        default: ''
+      project_directory:
+        type: string
+        required: false
+        default: .
+      linux_runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+      macos_runner:
+        type: string
+        required: false
+        default: macos-latest
+      windows_runner:
+        type: string
+        required: false
+        default: windows-latest
+      macos_deployment_target:
+        type: string
+        required: false
+        default: '14.0'
+      xcode_version:
+        type: string
+        required: false
+        default: ''
+      macos_install_gcc:
+        type: boolean
+        required: false
+        default: false
+      macos_install_fortran:
+        type: boolean
+        required: false
+        default: false
+      cibuildwheel_version:
+        type: string
+        required: false
+        default: 4.2.0
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      debug:
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.matrix.outputs.platforms }}
+    steps:
+    - name: Validate wheel matrix
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os
+        platforms = [name for name in ('linux', 'macos', 'windows') if os.environ[name.upper()] == 'true']
+        if not platforms:
+            raise SystemExit('Select at least one wheel platform.')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('platforms=' + json.dumps(platforms) + '\n')
+        PYTHON
+      env:
+        LINUX: ${{ inputs.build_linux }}
+        MACOS: ${{ inputs.build_macos }}
+        WINDOWS: ${{ inputs.build_windows }}
+      id: matrix
+  build:
+    needs: plan
+    runs-on: ${{ matrix.platform == 'linux' && inputs.linux_runner || matrix.platform == 'macos' && inputs.macos_runner
+      || inputs.windows_runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJson(needs.plan.outputs.platforms) }}
+    env:
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      PLATFORM: ${{ matrix.platform }}
+      PROJECT_DIRECTORY: ${{ inputs.project_directory }}
+      MPLBACKEND: Agg
+      PYVISTA_OFF_SCREEN: 'true'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      MESA_GL_VERSION_OVERRIDE: '3.3'
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'macos' && inputs.macos_deployment_target || '' }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Load release helpers
+      uses: $/actions/release-tools
+    - name: Install Linux packages
+      run: |
+        set -Eeuo pipefail
+        packages=()
+        read -r -a packages <<< "$APT_PACKAGES"
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get update
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get install -y "${packages[@]}"
+      env:
+        APT_PACKAGES: ${{ inputs.apt_package }}
+      if: runner.os == 'Linux' && inputs.apt_package != ''
+    - name: Select Xcode
+      if: runner.os == 'macOS' && inputs.xcode_version != ''
+      uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
+      with:
+        xcode-version: ${{ inputs.xcode_version }}
+    - name: Install requested macOS packages
+      run: |
+        set -Eeuo pipefail
+        packages=()
+        read -r -a packages <<< "$BREW_PACKAGES"
+        if [ "$INSTALL_GCC" = true ]; then packages+=(gcc); fi
+        if [ "${#packages[@]}" -gt 0 ]; then python "$MPS_TOOLS/retry.py" -- brew install "${packages[@]}"; fi
+      env:
+        BREW_PACKAGES: ${{ inputs.brew_package }}
+        INSTALL_GCC: ${{ inputs.macos_install_gcc }}
+      if: runner.os == 'macOS'
+    - name: Set up Fortran
+      if: runner.os == 'macOS' && inputs.macos_install_fortran
+      uses: fortran-lang/setup-fortran@3367da2fee129ed4b7e4ba439ea3394ca40e396b
+    - name: Set up MSYS2
+      if: runner.os == 'Windows' && inputs.mingw_package != ''
+      id: msys2
+      uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884
+      with:
+        msystem: MINGW64
+        install: ${{ inputs.mingw_package }}
+        path-type: inherit
+        cache: false
+    - name: Configure Windows native tools
+      run: |
+        set -Eeuo pipefail
+        printf "%s/mingw64/bin\n" "$MSYS_LOCATION" >> "$GITHUB_PATH"
+        printf "CMAKE_ARGS=-DPKG_CONFIG_EXECUTABLE=%s/mingw64/bin/pkg-config.exe\n" "$MSYS_LOCATION" >> "$GITHUB_ENV"
+        echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+      env:
+        MSYS_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+      if: runner.os == 'Windows' && inputs.mingw_package != ''
+    - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67
+      if: runner.os == 'Windows'
+    - name: Install wheel build tools
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install "cibuildwheel==$CIBUILDWHEEL_VERSION" twine 2>&1 | tee "$RUNNER_TEMP/wheel-tools.log"
+      env:
+        CIBUILDWHEEL_VERSION: ${{ inputs.cibuildwheel_version }}
+    - name: Resolve expected wheel targets
+      run: |
+        set -Eeuo pipefail
+        python -m cibuildwheel --platform "$PLATFORM" --print-build-identifiers "$PROJECT_DIRECTORY" > "$RUNNER_TEMP/expected-wheels.txt"
+        test -s "$RUNNER_TEMP/expected-wheels.txt"
+        cat "$RUNNER_TEMP/expected-wheels.txt"
+    # pipefail preserves build/test failures while tee retains the full diagnostic log.
+    # Never retry compilation or tests; retries apply only to transient downloads.
+    - name: Build and test wheels
+      run: |
+        set -Eeuo pipefail
+        python -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/wheel-build.log"
+    - name: Validate distributions and write manifest
+      run: |
+        set -Eeuo pipefail
+        python -m twine check dist/*.whl
+        python "$MPS_TOOLS/artifacts.py" manifest --root dist --registry pypi --identity "wheels-$PLATFORM" --expected-file "$RUNNER_TEMP/expected-wheels.txt"
+        python "$MPS_TOOLS/artifacts.py" verify --root dist --registry pypi
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: wheels-${{ matrix.platform }}
+        path: dist/*
+        if-no-files-found: error
+    - name: Debug interpreter and build environment
+      run: |
+        set -Eeuo pipefail
+        python --version
+        python -m pip list
+        git log -1 --oneline
+      if: always() && inputs.debug
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: logs-wheels-${{ matrix.platform }}
+        path: |-
+          ${{ runner.temp }}/wheel-*.log
+          ${{ runner.temp }}/expected-wheels.txt
+        if-no-files-found: ignore
+      if: failure()

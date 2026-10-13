@@ -1,0 +1,142 @@
+name: Publish verified distributions
+'on':
+  workflow_call:
+    inputs:
+      registry:
+        type: string
+        required: true
+      artifact_identities:
+        type: string
+        required: true
+      package_name:
+        type: string
+        required: false
+        default: ''
+      conda_upload_user:
+        type: string
+        required: false
+        default: martinpdes
+      python_version:
+        type: string
+        required: false
+        default: '3.11'
+      conda_channels:
+        type: string
+        required: false
+        default: martinpdes,conda-forge
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+    secrets:
+      PYPI_API_TOKEN:
+        required: false
+      ANACONDA_API_TOKEN:
+        required: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+
+# Tokens are confined to publication; identical remote files are skipped on reruns.
+# Conflicting remote files fail rather than being overwritten.
+jobs:
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-${{ github.repository }}-${{ github.ref }}-${{ inputs.registry }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash -l {0}
+    env:
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      REGISTRY: ${{ inputs.registry }}
+      ARTIFACT_IDENTITIES: ${{ inputs.artifact_identities }}
+    steps:
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python_version }}
+    - name: Load release helpers
+      uses: $/actions/release-tools
+    - name: Install Conda archive reader
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install "conda-package-handling>=2.4,<3"
+      if: inputs.registry == 'conda'
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: wheels-*
+        path: dist
+        merge-multiple: true
+      if: inputs.registry == 'pypi'
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: conda-package-*
+        path: conda-build-artifacts
+        merge-multiple: true
+      if: inputs.registry == 'conda'
+    - name: Validate registry selection
+      run: |
+        set -Eeuo pipefail
+        case "$REGISTRY" in pypi|conda) ;; *) echo "Unknown registry" >&2; exit 1;; esac
+    - name: Recheck artifact integrity
+      run: |
+        set -Eeuo pipefail
+        if [ "$REGISTRY" = pypi ]; then root=dist; else root=conda-build-artifacts; fi
+        python "$MPS_TOOLS/artifacts.py" verify --root "$root" --registry "$REGISTRY" --identities-json "$ARTIFACT_IDENTITIES"
+    - name: Install PyPI upload tools
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install twine
+      if: inputs.registry == 'pypi'
+    - name: Check PyPI token
+      run: |
+        set -Eeuo pipefail
+        test -n "$TWINE_PASSWORD" || { echo "PYPI_API_TOKEN is required for publication." >&2; exit 1; }
+      env:
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      if: inputs.registry == 'pypi'
+    - name: Publish to PyPI
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/publish.py" --root dist --registry pypi --identities-json "$ARTIFACT_IDENTITIES"
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      if: inputs.registry == 'pypi'
+    - name: Set up Conda publishing tools
+      if: inputs.registry == 'conda'
+      uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
+      with:
+        miniforge-version: 26.7.2-0
+        activate-environment: base
+        python-version: '3.11'
+        channels: conda-forge
+        conda-remove-defaults: true
+    - name: Install Anaconda client
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- conda install -n base -y --override-channels -c conda-forge anaconda-client conda-package-handling
+      if: inputs.registry == 'conda'
+    - name: Publish to Anaconda
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/publish.py" --root conda-build-artifacts --registry conda --identities-json "$ARTIFACT_IDENTITIES" --user "$UPLOAD_USER"
+      env:
+        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+        UPLOAD_USER: ${{ inputs.conda_upload_user }}
+      if: inputs.registry == 'conda'
+    - name: Summarize publication
+      run: |
+        set -Eeuo pipefail
+        printf "### Publication complete\n\nRegistry: %s\n\nCommit: \`%s\`\n" "$REGISTRY" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

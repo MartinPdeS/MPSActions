@@ -1,0 +1,16 @@
+name: Release tools
+description: Expose the release helpers from the same revision as this workflow.
+outputs:
+  path:
+    description: Directory containing retry, artifact, and documentation helpers.
+    value: ${{ steps.tools.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - id: tools
+      shell: bash
+      env:
+        TOOLS_PATH: ${{ github.action_path }}
+      run: |
+        printf 'path=%s\n' "$TOOLS_PATH" >> "$GITHUB_OUTPUT"
+        printf 'MPS_TOOLS=%s\n' "$TOOLS_PATH" >> "$GITHUB_ENV"

@@ -1,6 +1,5 @@
 name: Publish Python Package Release
-
-on:
+'on':
   workflow_call:
     inputs:
       pypi_python_version:
@@ -18,15 +17,15 @@ on:
       pypi_apt_package:
         required: false
         type: string
-        default: ""
+        default: ''
       pypi_brew_package:
         required: false
         type: string
-        default: ""
+        default: ''
       pypi_mingw_package:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_python_versions:
         required: true
         type: string
@@ -39,27 +38,27 @@ on:
       conda_recipe_path:
         required: false
         type: string
-        default: "."
+        default: .
       conda_test_import:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_test_command:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_apt_package:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_brew_package:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_channels:
         required: false
         type: string
-        default: "martinpdes,conda-forge"
+        default: martinpdes,conda-forge
       conda_max_artifact_size_mb:
         required: false
         type: number
@@ -67,29 +66,130 @@ on:
       conda_upload_user:
         required: false
         type: string
-        default: "martinpdes"
+        default: martinpdes
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      pypi_linux_runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+      pypi_macos_runner:
+        type: string
+        required: false
+        default: macos-latest
+      pypi_windows_runner:
+        type: string
+        required: false
+        default: windows-latest
+      pypi_macos_deployment_target:
+        type: string
+        required: false
+        default: '26.0'
+      pypi_xcode_version:
+        type: string
+        required: false
+        default: ''
+      pypi_macos_install_gcc:
+        type: boolean
+        required: false
+        default: true
+      pypi_macos_install_fortran:
+        type: boolean
+        required: false
+        default: true
+      pypi_cibuildwheel_version:
+        type: string
+        required: false
+        default: 4.2.0
+      conda_tools_python_version:
+        type: string
+        required: false
+        default: '3.11'
+      conda_build_version:
+        type: string
+        required: false
+        default: <26
+      conda_miniforge_version:
+        type: string
+        required: false
+        default: 26.7.2-0
+      debug:
+        type: boolean
+        required: false
+        default: false
+      pypi_package_name:
+        type: string
+        required: false
+        default: ''
+        description: PyPI distribution name; defaults to the Conda package name.
     secrets:
       PYPI_API_TOKEN:
         required: true
       ANACONDA_API_TOKEN:
         required: true
-
+permissions:
+  contents: read
 jobs:
-  pypi:
-    uses: MartinPdeS/MPSActions/.github/workflows/publish_compiled_package_to_PyPi.yml@v2
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      wheels: ${{ steps.plan.outputs.wheels }}
+      conda: ${{ steps.plan.outputs.conda }}
+    steps:
+    - name: Plan release artifacts
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os
+        wheels = ['wheels-' + p for p in ('linux', 'macos', 'windows') if os.environ[p.upper()] == 'true']
+        conda = ['conda-package-' + runner + '-py' + version for runner in json.loads(os.environ['RUNNERS']) for version in json.loads(os.environ['PYTHONS'])]
+        if not wheels or not conda:
+            raise SystemExit('Both registries require a nonempty artifact matrix.')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('wheels=' + json.dumps(wheels) + '\n')
+            output.write('conda=' + json.dumps(conda) + '\n')
+        PYTHON
+      env:
+        LINUX: ${{ inputs.pypi_build_linux }}
+        MACOS: ${{ inputs.pypi_build_macos }}
+        WINDOWS: ${{ inputs.pypi_build_windows }}
+        RUNNERS: ${{ inputs.conda_os_list }}
+        PYTHONS: ${{ inputs.conda_python_versions }}
+      id: plan
+  # Relative reusable workflows resolve to the same revision as this entry point.
+  # Build jobs receive no registry tokens.
+  wheels:
+    uses: ./.github/workflows/build_wheels.yml
     with:
-      python-version: ${{ inputs.pypi_python_version }}
-      build-Linux: ${{ inputs.pypi_build_linux }}
-      build-macOS: ${{ inputs.pypi_build_macos }}
-      build-Windows: ${{ inputs.pypi_build_windows }}
-      apt-package: ${{ inputs.pypi_apt_package }}
-      brew-package: ${{ inputs.pypi_brew_package }}
-      mingw-package: ${{ inputs.pypi_mingw_package }}
-    secrets:
-      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-
+      python_version: ${{ inputs.pypi_python_version }}
+      build_linux: ${{ inputs.pypi_build_linux }}
+      build_macos: ${{ inputs.pypi_build_macos }}
+      build_windows: ${{ inputs.pypi_build_windows }}
+      apt_package: ${{ inputs.pypi_apt_package }}
+      brew_package: ${{ inputs.pypi_brew_package }}
+      mingw_package: ${{ inputs.pypi_mingw_package }}
+      linux_runner: ${{ inputs.pypi_linux_runner }}
+      macos_runner: ${{ inputs.pypi_macos_runner }}
+      windows_runner: ${{ inputs.pypi_windows_runner }}
+      macos_deployment_target: ${{ inputs.pypi_macos_deployment_target }}
+      xcode_version: ${{ inputs.pypi_xcode_version }}
+      macos_install_gcc: ${{ inputs.pypi_macos_install_gcc }}
+      macos_install_fortran: ${{ inputs.pypi_macos_install_fortran }}
+      cibuildwheel_version: ${{ inputs.pypi_cibuildwheel_version }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      debug: ${{ inputs.debug }}
+    needs: plan
   conda:
-    uses: MartinPdeS/MPSActions/.github/workflows/publish_compiled_package_to_anaconda.yml@v6
+    uses: ./.github/workflows/build_conda_matrix.yml
     with:
       python_versions: ${{ inputs.conda_python_versions }}
       os_list: ${{ inputs.conda_os_list }}
@@ -99,8 +199,56 @@ jobs:
       test_command: ${{ inputs.conda_test_command }}
       apt_package: ${{ inputs.conda_apt_package }}
       brew_package: ${{ inputs.conda_brew_package }}
-      conda_channels: ${{ inputs.conda_channels }}
       max_artifact_size_mb: ${{ inputs.conda_max_artifact_size_mb }}
+      conda_channels: ${{ inputs.conda_channels }}
+      tools_python_version: ${{ inputs.conda_tools_python_version }}
+      conda_build_version: ${{ inputs.conda_build_version }}
+      miniforge_version: ${{ inputs.conda_miniforge_version }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      debug: ${{ inputs.debug }}
+    needs: plan
+  # Both registries wait for the complete build matrix and checksum/metadata checks.
+  # Uploads across two registries cannot be atomic; reruns safely resume publication.
+  validate:
+    needs:
+    - plan
+    - wheels
+    - conda
+    uses: ./.github/workflows/validate_release.yml
+    with:
+      wheel_identities: ${{ needs.plan.outputs.wheels }}
+      conda_identities: ${{ needs.plan.outputs.conda }}
+      package_name: ${{ inputs.conda_package_name }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      pypi_package_name: ${{ inputs.pypi_package_name != '' && inputs.pypi_package_name || inputs.conda_package_name
+        }}
+  publish_pypi:
+    needs:
+    - plan
+    - validate
+    uses: ./.github/workflows/publish_distributions.yml
+    with:
+      registry: pypi
+      artifact_identities: ${{ needs.plan.outputs.wheels }}
+      python_version: ${{ inputs.pypi_python_version }}
       conda_upload_user: ${{ inputs.conda_upload_user }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+  publish_conda:
+    needs:
+    - plan
+    - validate
+    uses: ./.github/workflows/publish_distributions.yml
+    with:
+      registry: conda
+      artifact_identities: ${{ needs.plan.outputs.conda }}
+      python_version: ${{ inputs.pypi_python_version }}
+      conda_upload_user: ${{ inputs.conda_upload_user }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
     secrets:
       ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}

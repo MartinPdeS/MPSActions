@@ -10,3 +10,8 @@
 .vscode/
 .pytest_cache/
 __pycache__/
+
+# Integration-fixture build products
+*.egg-info/
+build/
+dist/

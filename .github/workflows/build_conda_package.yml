@@ -1,6 +1,5 @@
 name: Build Conda Package
-
-on:
+'on':
   workflow_call:
     inputs:
       os:
@@ -16,154 +15,179 @@ on:
         description: Deprecated Python import target for installed-package verification.
         type: string
         required: false
-        default: ""
+        default: ''
       test_command:
         description: Optional command to run in the clean Conda test environment.
         type: string
         required: false
-        default: ""
+        default: ''
       apt_package:
         required: false
         type: string
-        default: ""
+        default: ''
       brew_package:
         required: false
         type: string
-        default: ""
+        default: ''
       conda_channels:
         required: false
         type: string
-        default: "martinpdes,conda-forge"
+        default: martinpdes,conda-forge
       recipe_path:
         description: Path to the Conda recipe directory or meta.yaml file.
         required: false
         type: string
-        default: "."
+        default: .
       max_artifact_size_mb:
         description: Maximum permitted Conda archive size in MiB.
         required: false
         type: number
         default: 500
-
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      tools_python_version:
+        type: string
+        required: false
+        default: '3.11'
+      conda_build_version:
+        type: string
+        required: false
+        default: <26
+      miniforge_version:
+        type: string
+        required: false
+        default: 26.7.2-0
+      debug:
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
 defaults:
   run:
     shell: bash -l {0}
-
 jobs:
   build:
     name: Build / ${{ inputs.os }} / Python ${{ inputs.python_version }}
     runs-on: ${{ inputs.os }}
     env:
       CONDA_BUILD_OUTPUT_DIRECTORY: conda-build-artifacts
-
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      PACKAGE_NAME: ${{ inputs.package_name }}
+      TARGET_PYTHON: ${{ inputs.python_version }}
+      RECIPE_PATH: ${{ inputs.recipe_path }}
+      CHANNELS: ${{ inputs.conda_channels }}
+      IDENTITY: conda-package-${{ inputs.os }}-py${{ inputs.python_version }}
+      TEST_COMMAND: ${{ inputs.test_command }}
+      TEST_IMPORT: ${{ inputs.test_import }}
+      MAX_SIZE: ${{ inputs.max_artifact_size_mb }}
+      TOOLS_PYTHON: ${{ inputs.tools_python_version }}
+      CONDA_BUILD_VERSION: ${{ inputs.conda_build_version }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux' && inputs.apt_package != ''
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ${{ inputs.apt_package }}
-
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS' && inputs.brew_package != ''
-        run: |
-          set -Eeuo pipefail
-          brew update
-          brew install ${{ inputs.brew_package }}
-
-      - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
-        with:
-          miniforge-version: latest
-          auto-update-conda: false
-          auto-activate: true
-          activate-environment: base
-          # Build tools run independently of the package target selected by --python.
-          python-version: "3.11"
-          channels: ${{ inputs.conda_channels }}
-          channel-priority: strict
-          conda-remove-defaults: true
-
-      - name: Install Conda build tools
-        run: |
-          set -Eeuo pipefail
-          conda install -n base -y --override-channels -c conda-forge "python=3.11" "conda-build<26"
-          conda --version
-          conda-build --version
-
-      - name: Build package
-        run: |
-          set -Eeuo pipefail
-          IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
-          channel_arguments=()
-          for channel in "${channels[@]}"; do
-            channel="$(echo "${channel}" | xargs)"
-            [ -z "${channel}" ] || channel_arguments+=("-c" "${channel}")
-          done
-
-          rm -rf "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-          mkdir -p "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-
-          # conda-build currently creates an invalid *_debug_cpython
-          # constraint for its own test environment. The artifact is tested
-          # independently in the next step.
-          conda-build "${{ inputs.recipe_path }}" --no-test --python "${{ inputs.python_version }}" \
-            --override-channels "${channel_arguments[@]}" \
-            --output-folder "${CONDA_BUILD_OUTPUT_DIRECTORY}"
-
-      - name: Verify the installed artifact
-        run: |
-          set -Eeuo pipefail
-          test_prefix="${RUNNER_TEMP}/conda-package-test"
-          find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \) -print -quit | grep -q . || { echo "No Conda package was built."; exit 1; }
-
-          IFS=',' read -ra channels <<< "${{ inputs.conda_channels }}"
-          local_channel="$(python -c 'import os; from pathlib import Path; print((Path(os.environ["GITHUB_WORKSPACE"]) / os.environ["CONDA_BUILD_OUTPUT_DIRECTORY"]).resolve().as_uri())')"
-          channel_arguments=("-c" "${local_channel}")
-          for channel in "${channels[@]}"; do
-            channel="$(echo "${channel}" | xargs)"
-            [ -z "${channel}" ] || channel_arguments+=("-c" "${channel}")
-          done
-
-          rm -rf "${test_prefix}"
-          conda create -y -p "${test_prefix}" --override-channels \
-            "${channel_arguments[@]}" \
-            "python=${{ inputs.python_version }}" "${{ inputs.package_name }}"
-          cd "${RUNNER_TEMP}"
-          if [ -n "${{ inputs.test_command }}" ]; then
-            conda run -p "${test_prefix}" bash -c "${{ inputs.test_command }}"
-          elif [ -n "${{ inputs.test_import }}" ]; then
-            conda run -p "${test_prefix}" python -c "import ${{ inputs.test_import }}"
-          else
-            echo "No installed-package verification command was configured."
-          fi
-
-      - name: Check artifact size and create manifest
-        run: |
-          set -Eeuo pipefail
-          manifest="${CONDA_BUILD_OUTPUT_DIRECTORY}/ARTIFACTS.sha256"
-          : > "${manifest}"
-          while IFS= read -r package_path; do
-            size_bytes="$(wc -c < "${package_path}" | tr -d ' ')"
-            size_mib=$((size_bytes / 1024 / 1024))
-            printf '%s MiB  %s\n' "${size_mib}" "${package_path}"
-            if [ "${size_mib}" -gt "${{ inputs.max_artifact_size_mb }}" ]; then
-              echo "Artifact exceeds ${{ inputs.max_artifact_size_mb }} MiB: ${package_path}" >&2
-              exit 1
-            fi
-            sha256sum "${package_path}" >> "${manifest}"
-          done < <(find "${CONDA_BUILD_OUTPUT_DIRECTORY}" -type f \( -name '*.conda' -o -name '*.tar.bz2' \) | sort)
-
-      - name: Upload built package
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: conda-package-${{ inputs.os }}-py${{ inputs.python_version }}
-          path: |
-            conda-build-artifacts/**/*.conda
-            conda-build-artifacts/**/*.tar.bz2
-          if-no-files-found: error
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - name: Load release helpers
+      uses: $/actions/release-tools
+    - name: Install Linux build dependencies
+      run: |
+        set -Eeuo pipefail
+        packages=()
+        read -r -a packages <<< "$APT_PACKAGES"
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get update
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get install -y "${packages[@]}"
+      env:
+        APT_PACKAGES: ${{ inputs.apt_package }}
+      if: runner.os == 'Linux' && inputs.apt_package != ''
+    - name: Install macOS build dependencies
+      run: |
+        set -Eeuo pipefail
+        packages=()
+        read -r -a packages <<< "$BREW_PACKAGES"
+        python "$MPS_TOOLS/retry.py" -- brew install "${packages[@]}"
+      env:
+        BREW_PACKAGES: ${{ inputs.brew_package }}
+      if: runner.os == 'macOS' && inputs.brew_package != ''
+    - name: Set up Miniforge
+      uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
+      with:
+        miniforge-version: ${{ inputs.miniforge_version }}
+        auto-update-conda: false
+        auto-activate: true
+        activate-environment: base
+        python-version: ${{ inputs.tools_python_version }}
+        channels: ${{ inputs.conda_channels }}
+        channel-priority: strict
+        conda-remove-defaults: true
+    # Tooling Python stays independent of the target Python used by the recipe.
+    - name: Install Conda build tools
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- conda install -n base -y --override-channels -c conda-forge "python=$TOOLS_PYTHON" "conda-build$CONDA_BUILD_VERSION" 2>&1 | tee "$RUNNER_TEMP/conda-tools.log"
+        conda --version
+        conda-build --version
+    - name: Build package
+      run: |
+        set -Eeuo pipefail
+        IFS=',' read -r -a channels <<< "$CHANNELS"
+        channel_arguments=()
+        for channel in "${channels[@]}"; do
+          channel="${channel// /}"
+          [ -z "$channel" ] || channel_arguments+=("-c" "$channel")
+        done
+        mkdir -p "$CONDA_BUILD_OUTPUT_DIRECTORY"
+        # Do not retry compilation: only transient dependency downloads are retried.
+        # Verification uses the exact archive in a separate, clean environment.
+        conda-build "$RECIPE_PATH" --no-test --python "$TARGET_PYTHON" \
+          --override-channels "${channel_arguments[@]}" --output-folder "$CONDA_BUILD_OUTPUT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/conda-build.log"
+    - name: Verify the installed artifact
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/artifacts.py" install-conda --root "$CONDA_BUILD_OUTPUT_DIRECTORY" --package "$PACKAGE_NAME" \
+          --python "$TARGET_PYTHON" --prefix "$RUNNER_TEMP/conda-package-test" --channels "$CHANNELS" 2>&1 | tee "$RUNNER_TEMP/conda-verification.log"
+        cd "$RUNNER_TEMP"
+        if [ -n "$TEST_COMMAND" ]; then
+          conda run -p "$RUNNER_TEMP/conda-package-test" bash -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
+        elif [ -n "$TEST_IMPORT" ]; then
+          conda run -p "$RUNNER_TEMP/conda-package-test" python -c "import $TEST_IMPORT" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
+        else
+          echo 'An installed-package test_command or test_import is required.' >&2
+          exit 1
+        fi
+    - name: Create and verify artifact manifest
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/artifacts.py" manifest --root "$CONDA_BUILD_OUTPUT_DIRECTORY" --registry conda --identity "$IDENTITY" --max-size-mb "$MAX_SIZE"
+        python "$MPS_TOOLS/artifacts.py" verify --root "$CONDA_BUILD_OUTPUT_DIRECTORY" --registry conda --package "$PACKAGE_NAME"
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: ${{ env.IDENTITY }}
+        path: |-
+          conda-build-artifacts/**/*.conda
+          conda-build-artifacts/**/*.tar.bz2
+          conda-build-artifacts/manifest-*.json
+        if-no-files-found: error
+    - name: Debug interpreter and build environment
+      run: |
+        set -Eeuo pipefail
+        python --version
+        python -m pip list
+        git log -1 --oneline
+      if: always() && inputs.debug
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: logs-${{ env.IDENTITY }}
+        # Preserve dependency errors as well as compilation and installed-package tests.
+        path: ${{ runner.temp }}/conda-*.log
+        if-no-files-found: ignore
+      if: failure()
