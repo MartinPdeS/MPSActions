@@ -126,7 +126,7 @@ jobs:
       MESA_GL_VERSION_OVERRIDE: '3.3'
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'macos' && inputs.macos_deployment_target || '' }}
     steps:
-    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         fetch-depth: 0
         submodules: recursive
