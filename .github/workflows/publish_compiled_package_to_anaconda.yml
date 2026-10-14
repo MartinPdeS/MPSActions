@@ -84,6 +84,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5
         with:
           miniforge-version: latest
+          python-version: "3.11"
           auto-update-conda: false
           auto-activate: true
           activate-environment: base
@@ -94,7 +95,7 @@ jobs:
       - name: Install Anaconda client
         run: |
           set -Eeuo pipefail
-          conda install -n base -y --override-channels -c conda-forge anaconda-client
+          conda install -n base -y --override-channels -c conda-forge "python=3.11" anaconda-client
           conda run -n base anaconda --help >/dev/null
 
       - name: Download verified packages
