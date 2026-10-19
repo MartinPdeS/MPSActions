@@ -118,6 +118,7 @@ jobs:
     env:
       MPS_RETRIES: ${{ inputs.download_retries }}
       MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      MPS_PYTHON: python
       PLATFORM: ${{ matrix.platform }}
       PROJECT_DIRECTORY: ${{ inputs.project_directory }}
       MPLBACKEND: Agg
@@ -177,6 +178,8 @@ jobs:
       run: |
         set -Eeuo pipefail
         printf "%s/mingw64/bin\n" "$MSYS_LOCATION" >> "$GITHUB_PATH"
+        windows_python="${pythonLocation//\\//}/python.exe"
+        printf "MPS_PYTHON=%s\n" "$windows_python" >> "$GITHUB_ENV"
         printf "CMAKE_ARGS=-DPKG_CONFIG_EXECUTABLE=%s/mingw64/bin/pkg-config.exe\n" "$MSYS_LOCATION" >> "$GITHUB_ENV"
         echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
       env:
@@ -187,13 +190,13 @@ jobs:
     - name: Install wheel build tools
       run: |
         set -Eeuo pipefail
-        python "$MPS_TOOLS/retry.py" -- python -m pip install "cibuildwheel==$CIBUILDWHEEL_VERSION" twine 2>&1 | tee "$RUNNER_TEMP/wheel-tools.log"
+        "$MPS_PYTHON" "$MPS_TOOLS/retry.py" -- "$MPS_PYTHON" -m pip install "cibuildwheel==$CIBUILDWHEEL_VERSION" twine 2>&1 | tee "$RUNNER_TEMP/wheel-tools.log"
       env:
         CIBUILDWHEEL_VERSION: ${{ inputs.cibuildwheel_version }}
     - name: Resolve expected wheel targets
       run: |
         set -Eeuo pipefail
-        python -m cibuildwheel --platform "$PLATFORM" --print-build-identifiers "$PROJECT_DIRECTORY" > "$RUNNER_TEMP/expected-wheels.txt"
+        "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --print-build-identifiers "$PROJECT_DIRECTORY" > "$RUNNER_TEMP/expected-wheels.txt"
         test -s "$RUNNER_TEMP/expected-wheels.txt"
         cat "$RUNNER_TEMP/expected-wheels.txt"
     # pipefail preserves build/test failures while tee retains the full diagnostic log.
@@ -201,13 +204,13 @@ jobs:
     - name: Build and test wheels
       run: |
         set -Eeuo pipefail
-        python -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/wheel-build.log"
+        "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/wheel-build.log"
     - name: Validate distributions and write manifest
       run: |
         set -Eeuo pipefail
-        python -m twine check dist/*.whl
-        python "$MPS_TOOLS/artifacts.py" manifest --root dist --registry pypi --identity "wheels-$PLATFORM" --expected-file "$RUNNER_TEMP/expected-wheels.txt"
-        python "$MPS_TOOLS/artifacts.py" verify --root dist --registry pypi
+        "$MPS_PYTHON" -m twine check dist/*.whl
+        "$MPS_PYTHON" "$MPS_TOOLS/artifacts.py" manifest --root dist --registry pypi --identity "wheels-$PLATFORM" --expected-file "$RUNNER_TEMP/expected-wheels.txt"
+        "$MPS_PYTHON" "$MPS_TOOLS/artifacts.py" verify --root dist --registry pypi
     - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
         name: wheels-${{ matrix.platform }}
@@ -216,8 +219,8 @@ jobs:
     - name: Debug interpreter and build environment
       run: |
         set -Eeuo pipefail
-        python --version
-        python -m pip list
+        "$MPS_PYTHON" --version
+        "$MPS_PYTHON" -m pip list
         git log -1 --oneline
       if: always() && inputs.debug
     - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
