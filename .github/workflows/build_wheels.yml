@@ -182,9 +182,6 @@ jobs:
         printf "MPS_PYTHON=%s\n" "$windows_python" >> "$GITHUB_ENV"
         printf "CMAKE_ARGS=-DPKG_CONFIG_EXECUTABLE=%s/mingw64/bin/pkg-config.exe\n" "$MSYS_LOCATION" >> "$GITHUB_ENV"
         echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
-        # Keep native Windows links within the runner memory budget.  Large
-        # extension modules can make parallel MinGW linkers exit with code 8.
-        echo "CMAKE_BUILD_PARALLEL_LEVEL=1" >> "$GITHUB_ENV"
       env:
         MSYS_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
       if: runner.os == 'Windows' && inputs.mingw_package != ''
@@ -205,9 +202,19 @@ jobs:
     # pipefail preserves build/test failures while tee retains the full diagnostic log.
     # Never retry compilation or tests; retries apply only to transient downloads.
     - name: Build and test wheels
+      if: runner.os != 'Windows'
       run: |
         set -Eeuo pipefail
         "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/wheel-build.log"
+    # Git Bash prepends its own runtime directories to PATH.  MinGW's
+    # assembler then fails even CMake's ABI probe, so Fortran runtime
+    # dependencies disappear from subsequent mixed C++/Fortran links.
+    - name: Build and test Windows wheels
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        & $env:MPS_PYTHON -m cibuildwheel --platform $env:PLATFORM --output-dir dist $env:PROJECT_DIRECTORY 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/wheel-build.log"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Validate distributions and write manifest
       run: |
         set -Eeuo pipefail

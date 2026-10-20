@@ -34,6 +34,7 @@ jobs:
       build_macos: true
       build_windows: true
       project_directory: tests/fixtures/native
+      mingw_package: mingw-w64-x86_64-toolchain mingw-w64-x86_64-gcc-fortran mingw-w64-x86_64-ninja
   native_conda:
     uses: ./.github/workflows/build_conda_matrix.yml
     with:
