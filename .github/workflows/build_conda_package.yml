@@ -175,8 +175,9 @@ jobs:
             # Conda can prepend its own ``bash`` shim to PATH.  It is not an
             # executable shell on the Windows runner, so select Git Bash by
             # its stable runner installation path instead.
-            test_shell="$(cygpath -w '/c/Program Files/Git/bin/bash.exe')"
-            test -f "$test_shell"
+            git_bash='/c/Program Files/Git/bin/bash.exe'
+            test -f "$git_bash"
+            test_shell="$(cygpath -w "$git_bash")"
           fi
           conda run -p "$RUNNER_TEMP/conda-package-test" "$test_shell" -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         elif [ -n "$TEST_IMPORT" ]; then
