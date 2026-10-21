@@ -92,7 +92,10 @@ jobs:
       run: |
         set -Eeuo pipefail
         if [ "$RUNNER_OS" = Windows ]; then
-          MPS_TEST_SHELL="$(cygpath -w "$BASH")"
+          # Use the runner's Git Bash explicitly; Conda may expose a
+          # non-executable bash shim earlier on PATH.
+          MPS_TEST_SHELL="$(cygpath -w '/c/Program Files/Git/bin/bash.exe')"
+          test -f "$MPS_TEST_SHELL"
         else
           MPS_TEST_SHELL="$BASH"
         fi
