@@ -82,7 +82,7 @@ jobs:
         python-version: ${{ inputs.python-version }}
     - &id001
       name: Load release helpers
-      uses: $/actions/release-tools
+      uses: MartinPdeS/MPSActions/actions/release-tools@v11
     - name: Install documentation system dependencies
       run: |
         set -Eeuo pipefail

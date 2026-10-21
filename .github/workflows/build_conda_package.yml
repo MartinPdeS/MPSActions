@@ -98,7 +98,7 @@ jobs:
         fetch-depth: 0
         submodules: recursive
     - name: Load release helpers
-      uses: $/actions/release-tools
+      uses: MartinPdeS/MPSActions/actions/release-tools@v11
     - name: Install Linux build dependencies
       run: |
         set -Eeuo pipefail

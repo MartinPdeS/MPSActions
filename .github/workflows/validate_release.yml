@@ -56,7 +56,7 @@ jobs:
       with:
         python-version: '3.11'
     - name: Load release helpers
-      uses: $/actions/release-tools
+      uses: MartinPdeS/MPSActions/actions/release-tools@v11
     - name: Install Conda archive reader
       run: |
         set -Eeuo pipefail
