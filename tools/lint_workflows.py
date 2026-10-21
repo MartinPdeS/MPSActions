@@ -1,9 +1,4 @@
-"""Validate local interfaces and run actionlint/ShellCheck.
-
-Actionlint 1.7.12 predates GitHub's July 2026 $/ action references. Ignore only
-its exact false positive for our release-tools action; validate that reference
-and its inputs here. All other actionlint diagnostics remain errors.
-"""
+"""Validate reusable workflow interfaces and run actionlint/ShellCheck."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -39,15 +34,11 @@ def validate_interfaces(root=ROOT):
                     raise ValueError(f'{path.name}: unknown reusable-workflow secrets')
             for step in job.get('steps', []):
                 reference = step.get('uses', '')
-                if reference.startswith('$/'):
-                    action = root / reference[2:] / 'action.yml'
-                    if not action.is_file():
-                        raise ValueError(f'unknown self-repository action: {reference}')
-                    expected = load(action).get('inputs', {})
-                    if set(step.get('with', {})) - set(expected):
-                        raise ValueError(f'unknown action inputs: {reference}')
                 if reference.startswith('MartinPdeS/MPSActions/'):
-                    raise ValueError('internal actions must resolve to the running revision')
+                    action_reference, separator, revision = reference.partition('@')
+                    action = root / action_reference.split('/', 2)[2] / 'action.yml'
+                    if not separator or not revision or not action.is_file():
+                        raise ValueError(f'invalid internal action reference: {reference}')
 
 
 def main():
@@ -58,7 +49,6 @@ def main():
     validate_interfaces()
     workflows = sorted(str(path) for path in (ROOT / '.github/workflows').glob('*.yml'))
     subprocess.run([arguments.actionlint, '-shellcheck', arguments.shellcheck,
-                    '-ignore', r'specifying action "\$/actions/release-tools" in invalid format because ref is missing',
                     *workflows], cwd=ROOT, check=True)
     scripts = sorted(str(path) for path in ROOT.rglob('*.sh'))
     if scripts:
