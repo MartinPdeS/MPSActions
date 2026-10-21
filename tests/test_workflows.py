@@ -80,7 +80,8 @@ def test_integration_workflows_use_real_builds_without_publication():
     assert jobs['native_conda']['uses'].endswith('build_conda_matrix.yml')
     assert all('secrets' not in job for job in jobs.values())
     assert all('publish' not in job['uses'] for name, job in jobs.items() if name != 'documentation')
-    assert jobs['documentation']['uses'].endswith('build_documentation.yml')
+    assert 'publish_documentation.yml@' in jobs['documentation']['uses']
+    assert jobs['documentation']['with']['deploy-pages'] is False
 
 
 def test_conda_manifest_is_uploaded_with_archives():

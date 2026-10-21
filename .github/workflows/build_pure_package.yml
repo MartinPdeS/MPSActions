@@ -69,7 +69,7 @@ jobs:
       with:
         python-version: ${{ inputs.python_version }}
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+      uses: MartinPdeS/MPSActions/actions/release-tools@v13
     - name: Log source and network retry policy
       run: |
         set -Eeuo pipefail
@@ -91,6 +91,12 @@ jobs:
     - name: Test installed wheel outside checkout
       run: |
         set -Eeuo pipefail
+        if [ "$RUNNER_OS" = Windows ]; then
+          MPS_TEST_SHELL="$(cygpath -w "$BASH")"
+        else
+          MPS_TEST_SHELL="$BASH"
+        fi
+        export MPS_TEST_SHELL
         python - <<'PYTHON'
         import os, subprocess, sys, tempfile, venv
         from pathlib import Path
@@ -108,7 +114,9 @@ jobs:
             environment['PATH'] = str(executable.parent) + os.pathsep + environment['PATH']
             command = os.environ['TEST_COMMAND']
             if command:
-                subprocess.run(['bash', '-c', command], cwd=temporary, env=environment, check=True)
+                # Windows' System32/bash.exe starts WSL, not Git Bash. The
+                # enclosing Actions step exports its actual Bash executable.
+                subprocess.run([os.environ['MPS_TEST_SHELL'], '-c', command], cwd=temporary, env=environment, check=True)
             else:
                 name = os.environ['TEST_IMPORT']
                 if not name:
