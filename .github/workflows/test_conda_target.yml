@@ -1,0 +1,34 @@
+name: Verify one Conda target
+'on':
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Runner to verify without waiting for the entire matrix.
+        type: choice
+        options:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+        default: windows-latest
+      python_version:
+        description: Python version for the installed native fixture.
+        type: choice
+        options:
+          - '3.14'
+          - '3.11'
+        default: '3.14'
+permissions:
+  contents: read
+jobs:
+  native_conda:
+    uses: ./.github/workflows/build_conda_package.yml
+    with:
+      os: ${{ inputs.os }}
+      python_version: ${{ inputs.python_version }}
+      package_name: mps-fixture-native
+      recipe_path: tests/fixtures/native/conda.recipe
+      conda_channels: conda-forge
+      test_command: >-
+        python -c "import mps_fixture_native as m; from pathlib import Path;
+        assert m.add(2, 3) == 5; assert 'site-packages' in Path(m.__file__).parts"
+      debug: true
