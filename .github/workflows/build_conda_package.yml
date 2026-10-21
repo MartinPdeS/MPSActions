@@ -106,7 +106,7 @@ jobs:
         fetch-depth: 0
         submodules: recursive
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v13
+      uses: MartinPdeS/MPSActions/actions/release-tools@v14
     - name: Log source and network retry policy
       run: |
         set -Eeuo pipefail
@@ -119,8 +119,7 @@ jobs:
         set -Eeuo pipefail
         packages=()
         read -r -a packages <<< "$APT_PACKAGES"
-        python "$MPS_TOOLS/retry.py" -- sudo apt-get update
-        python "$MPS_TOOLS/retry.py" -- sudo apt-get install -y "${packages[@]}"
+        python "$MPS_TOOLS/install_apt.py" "${packages[@]}"
       env:
         APT_PACKAGES: ${{ inputs.apt_package }}
       if: runner.os == 'Linux' && inputs.apt_package != ''

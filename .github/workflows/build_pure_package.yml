@@ -69,7 +69,7 @@ jobs:
       with:
         python-version: ${{ inputs.python_version }}
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v13
+      uses: MartinPdeS/MPSActions/actions/release-tools@v14
     - name: Log source and network retry policy
       run: |
         set -Eeuo pipefail

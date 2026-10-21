@@ -10,7 +10,7 @@ jobs:
       contents: write
       pages: write
       id-token: write
-    uses: MartinPdeS/MPSActions/.github/workflows/publish_release.yml@v13
+    uses: MartinPdeS/MPSActions/.github/workflows/publish_release.yml@v14
     with:
       documentation: true
       documentation_package_name: MyPackage
@@ -52,6 +52,11 @@ connection timeouts. pip/uv retry settings are passed into cibuildwheel's Linux
 containers and inherited by macOS and Windows builds. The Windows build continues
 to run under PowerShell to preserve its native toolchain environment.
 
+Ubuntu system dependencies are installed using the runner's Ubuntu archive
+configuration. Unrelated preinstalled vendor repositories are not refreshed; an
+outage in one of those repositories must not block installing Ubuntu packages.
+APT signature verification remains enabled.
+
 Uploads recheck the registry checksum after a failed request. If the upload
 already completed, the job proceeds without sending it again. An identical
 existing file is skipped on reruns; a different file with the same name fails.
@@ -72,3 +77,7 @@ can change archive checksums even when the source is unchanged. A documentation
 deployment failure can likewise be rerun without rebuilding or reuploading packages.
 
 No new package release or tag is needed to retry an interrupted publication.
+
+For an isolated Conda check, dispatch **Verify one Conda target** and choose its
+runner and Python version. It builds and checks the native fixture without
+publishing anything to either registry.
