@@ -3,17 +3,47 @@ name: Publish Python Package Release
   workflow_call:
     inputs:
       pypi_python_version:
-        required: true
+        required: false
         type: string
+        default: '3.11'
+      pypi_package_type:
+        required: false
+        type: string
+        default: compiled
+        description: "PyPI build mode: pure or compiled."
       pypi_build_linux:
-        required: true
+        required: false
         type: boolean
+        default: false
       pypi_build_macos:
-        required: true
+        required: false
         type: boolean
+        default: false
       pypi_build_windows:
-        required: true
+        required: false
         type: boolean
+        default: false
+      pypi_project_directory:
+        required: false
+        type: string
+        default: .
+      pypi_test_import:
+        required: false
+        type: string
+        default: ''
+      pypi_test_command:
+        required: false
+        type: string
+        default: ''
+      pypi_runner:
+        required: false
+        type: string
+        default: ubuntu-latest
+      release_validation_command:
+        required: false
+        type: string
+        default: ''
+        description: "Optional command to validate the repository tag and release metadata."
       pypi_apt_package:
         required: false
         type: string
@@ -141,32 +171,70 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
-      wheels: ${{ steps.plan.outputs.wheels }}
+      pypi: ${{ steps.plan.outputs.pypi }}
       conda: ${{ steps.plan.outputs.conda }}
     steps:
+    - name: Check out repository for release validation
+      if: inputs.release_validation_command != ''
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+    - name: Set up Python for release validation
+      if: inputs.release_validation_command != ''
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.pypi_python_version }}
+    - name: Validate release metadata
+      if: inputs.release_validation_command != ''
+      run: |
+        set -Eeuo pipefail
+        ${{ inputs.release_validation_command }}
     - name: Plan release artifacts
       run: |
         set -Eeuo pipefail
         python - <<'PYTHON'
         import json, os
-        wheels = ['wheels-' + p for p in ('linux', 'macos', 'windows') if os.environ[p.upper()] == 'true']
+        package_type = os.environ['PACKAGE_TYPE']
+        if package_type == 'pure':
+            pypi = ['wheels-pure']
+        elif package_type == 'compiled':
+            pypi = ['wheels-' + p for p in ('linux', 'macos', 'windows') if os.environ[p.upper()] == 'true']
+        else:
+            raise SystemExit(f'Unsupported pypi_package_type: {package_type!r}')
         conda = ['conda-package-' + runner + '-py' + version for runner in json.loads(os.environ['RUNNERS']) for version in json.loads(os.environ['PYTHONS'])]
-        if not wheels or not conda:
-            raise SystemExit('Both registries require a nonempty artifact matrix.')
+        if not pypi:
+            raise SystemExit('The PyPI artifact matrix must not be empty.')
+        if not conda:
+            raise SystemExit('The Conda artifact matrix must not be empty.')
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-            output.write('wheels=' + json.dumps(wheels) + '\n')
+            output.write('pypi=' + json.dumps(pypi) + '\n')
             output.write('conda=' + json.dumps(conda) + '\n')
         PYTHON
       env:
         LINUX: ${{ inputs.pypi_build_linux }}
         MACOS: ${{ inputs.pypi_build_macos }}
         WINDOWS: ${{ inputs.pypi_build_windows }}
+        PACKAGE_TYPE: ${{ inputs.pypi_package_type }}
         RUNNERS: ${{ inputs.conda_os_list }}
         PYTHONS: ${{ inputs.conda_python_versions }}
       id: plan
   # Relative reusable workflows resolve to the same revision as this entry point.
   # Build jobs receive no registry tokens.
-  wheels:
+  pypi_pure:
+    if: inputs.pypi_package_type == 'pure'
+    uses: ./.github/workflows/build_pure_package.yml
+    with:
+      python_version: ${{ inputs.pypi_python_version }}
+      runner: ${{ inputs.pypi_runner }}
+      project_directory: ${{ inputs.pypi_project_directory }}
+      test_import: ${{ inputs.pypi_test_import }}
+      test_command: ${{ inputs.pypi_test_command }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      artifact_identity: wheels-pure
+    needs: plan
+  pypi_compiled:
+    if: inputs.pypi_package_type == 'compiled'
     uses: ./.github/workflows/build_wheels.yml
     with:
       python_version: ${{ inputs.pypi_python_version }}
@@ -211,13 +279,17 @@ jobs:
   # Both registries wait for the complete build matrix and checksum/metadata checks.
   # Uploads across two registries cannot be atomic; reruns safely resume publication.
   validate:
+    if: >-
+      always() && needs.plan.result == 'success' && needs.conda.result == 'success' &&
+      (needs.pypi_pure.result == 'success' || needs.pypi_compiled.result == 'success')
     needs:
     - plan
-    - wheels
+    - pypi_pure
+    - pypi_compiled
     - conda
     uses: ./.github/workflows/validate_release.yml
     with:
-      wheel_identities: ${{ needs.plan.outputs.wheels }}
+      wheel_identities: ${{ needs.plan.outputs.pypi }}
       conda_identities: ${{ needs.plan.outputs.conda }}
       package_name: ${{ inputs.conda_package_name }}
       download_retries: ${{ inputs.download_retries }}
@@ -231,7 +303,7 @@ jobs:
     uses: ./.github/workflows/publish_distributions.yml
     with:
       registry: pypi
-      artifact_identities: ${{ needs.plan.outputs.wheels }}
+      artifact_identities: ${{ needs.plan.outputs.pypi }}
       python_version: ${{ inputs.pypi_python_version }}
       conda_upload_user: ${{ inputs.conda_upload_user }}
       download_retries: ${{ inputs.download_retries }}
