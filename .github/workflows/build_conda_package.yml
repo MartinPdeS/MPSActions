@@ -171,7 +171,9 @@ jobs:
           --python "$TARGET_PYTHON" --prefix "$RUNNER_TEMP/conda-package-test" --channels "$CHANNELS" 2>&1 | tee "$RUNNER_TEMP/conda-verification.log"
         cd "$RUNNER_TEMP"
         if [ -n "$TEST_COMMAND" ]; then
-          conda run -p "$RUNNER_TEMP/conda-package-test" bash -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
+          test_shell="$BASH"
+          if [ "$RUNNER_OS" = Windows ]; then test_shell="$(cygpath -w "$BASH")"; fi
+          conda run -p "$RUNNER_TEMP/conda-package-test" "$test_shell" -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         elif [ -n "$TEST_IMPORT" ]; then
           conda run -p "$RUNNER_TEMP/conda-package-test" python -c "import $TEST_IMPORT" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         else

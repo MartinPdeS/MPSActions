@@ -1,0 +1,3 @@
+# Match the Visual Studio toolchain available on current Windows runners.
+cxx_compiler:  # [win]
+  - vs2022  # [win]
