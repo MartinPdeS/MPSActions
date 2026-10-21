@@ -135,7 +135,7 @@ jobs:
       CONDA_REMOTE_CONNECT_TIMEOUT_SECS: '30'
       CONDA_REMOTE_READ_TIMEOUT_SECS: '90'
     steps:
-    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         fetch-depth: 0
         submodules: recursive
