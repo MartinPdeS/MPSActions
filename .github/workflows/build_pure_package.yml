@@ -96,7 +96,7 @@ jobs:
           # non-executable bash shim earlier on PATH.
           git_bash='/c/Program Files/Git/bin/bash.exe'
           test -f "$git_bash"
-          MPS_TEST_SHELL="$(cygpath -w "$git_bash")"
+          MPS_TEST_SHELL="$(cygpath -m "$git_bash")"
         else
           MPS_TEST_SHELL="$BASH"
         fi

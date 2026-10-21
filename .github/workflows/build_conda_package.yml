@@ -177,7 +177,9 @@ jobs:
             # its stable runner installation path instead.
             git_bash='/c/Program Files/Git/bin/bash.exe'
             test -f "$git_bash"
-            test_shell="$(cygpath -w "$git_bash")"
+            # Use forward slashes so Conda does not treat the drive letter as
+            # a relative command and prepend its own installation directory.
+            test_shell="$(cygpath -m "$git_bash")"
           fi
           conda run -p "$RUNNER_TEMP/conda-package-test" "$test_shell" -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         elif [ -n "$TEST_IMPORT" ]; then
