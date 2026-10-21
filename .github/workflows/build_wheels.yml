@@ -179,9 +179,11 @@ jobs:
         set -Eeuo pipefail
         printf "%s/mingw64/bin\n" "$MSYS_LOCATION" >> "$GITHUB_PATH"
         windows_python="${pythonLocation//\\//}/python.exe"
-        printf "MPS_PYTHON=%s\n" "$windows_python" >> "$GITHUB_ENV"
-        printf "CMAKE_ARGS=-DPKG_CONFIG_EXECUTABLE=%s/mingw64/bin/pkg-config.exe\n" "$MSYS_LOCATION" >> "$GITHUB_ENV"
-        echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+        {
+          printf "MPS_PYTHON=%s\n" "$windows_python"
+          printf "CMAKE_ARGS=-DPKG_CONFIG_EXECUTABLE=%s/mingw64/bin/pkg-config.exe\n" "$MSYS_LOCATION"
+          echo "CMAKE_GENERATOR=Ninja"
+        } >> "$GITHUB_ENV"
       env:
         MSYS_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
       if: runner.os == 'Windows' && inputs.mingw_package != ''
