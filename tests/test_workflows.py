@@ -27,9 +27,10 @@ def ancestors(jobs, name):
 def test_both_registries_wait_for_all_builds_and_validation():
     jobs = workflow('publish_release.yml')['jobs']
     for publisher in ('publish_pypi', 'publish_conda'):
-        assert {'wheels', 'conda', 'validate'} <= ancestors(jobs, publisher)
+        assert {'pypi_pure', 'pypi_compiled', 'conda', 'validate'} <= ancestors(jobs, publisher)
         assert 'always()' not in jobs[publisher].get('if', '')
-    assert 'secrets' not in jobs['wheels']
+    assert 'secrets' not in jobs['pypi_pure']
+    assert 'secrets' not in jobs['pypi_compiled']
     assert 'secrets' not in jobs['conda']
 
 
@@ -61,13 +62,11 @@ def test_linter_rejects_unrecognized_workflow_inputs(tmp_path):
 def test_existing_public_inputs_and_tokens_are_preserved():
     release = workflow('publish_release.yml')['on']['workflow_call']
     assert {'pypi_python_version', 'pypi_build_linux', 'pypi_build_macos', 'pypi_build_windows',
+            'pypi_package_type', 'pypi_project_directory', 'pypi_test_import', 'pypi_test_command',
             'pypi_apt_package', 'pypi_brew_package', 'pypi_mingw_package', 'conda_python_versions',
             'conda_os_list', 'conda_package_name', 'conda_recipe_path', 'conda_test_command',
             'conda_test_import', 'conda_channels', 'conda_upload_user'} <= set(release['inputs'])
     assert set(release['secrets']) == {'PYPI_API_TOKEN', 'ANACONDA_API_TOKEN'}
-    compiled = workflow('publish_compiled_package_to_PyPi.yml')['on']['workflow_call']['inputs']
-    assert {'python-version', 'build-Linux', 'build-macOS', 'build-Windows',
-            'apt-package', 'brew-package', 'mingw-package'} <= set(compiled)
 
 
 def test_integration_workflows_use_real_builds_without_publication():
