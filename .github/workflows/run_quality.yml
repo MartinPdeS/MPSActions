@@ -1,0 +1,81 @@
+name: Run package quality checks
+'on':
+  workflow_call:
+    inputs:
+      python-versions:
+        type: string
+        required: false
+        default: '["3.11"]'
+      install-command:
+        type: string
+        required: true
+      quality-command:
+        type: string
+        required: true
+      apt-package:
+        type: string
+        required: false
+        default: ''
+      fetch-depth:
+        type: number
+        required: false
+        default: 0
+      submodules:
+        type: string
+        required: false
+        default: 'false'
+      working-directory:
+        type: string
+        required: false
+        default: .
+      debug:
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  quality:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(inputs.python-versions) }}
+    env:
+      PROJECT_DIRECTORY: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+          submodules: ${{ inputs.submodules }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install system dependencies
+        if: inputs.apt-package != ''
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-package }}
+      - name: Install quality dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -Eeuo pipefail
+          ${{ inputs.install-command }}
+      - name: Run quality checks
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -Eeuo pipefail
+          ${{ inputs.quality-command }}
+      - name: Debug quality environment
+        if: always() && inputs.debug
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -Eeuo pipefail
+          python --version
+          python -m pip list
+          git log -1 --oneline
