@@ -52,6 +52,14 @@ jobs:
       TEST_IMPORT: ${{ inputs.test_import }}
       MPLBACKEND: Agg
       ARTIFACT_IDENTITY: ${{ inputs.artifact_identity }}
+      PIP_RETRIES: '5'
+      PIP_DEFAULT_TIMEOUT: '60'
+      PIP_RESUME_RETRIES: '5'
+      UV_HTTP_RETRIES: '5'
+      UV_HTTP_TIMEOUT: '60'
+      CONDA_REMOTE_MAX_RETRIES: '5'
+      CONDA_REMOTE_CONNECT_TIMEOUT_SECS: '30'
+      CONDA_REMOTE_READ_TIMEOUT_SECS: '90'
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       with:
@@ -61,7 +69,14 @@ jobs:
       with:
         python-version: ${{ inputs.python_version }}
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v11
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+    - name: Log source and network retry policy
+      run: |
+        set -Eeuo pipefail
+        printf 'Repository: %s\nRef: %s\nCommit: %s\nRunner: %s/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$RUNNER_OS" "$RUNNER_ARCH"
+        printf 'Additional network attempts: %s; initial backoff: %ss\n' "$MPS_RETRIES" "$MPS_RETRY_DELAY"
+        printf 'pip retries: %s; timeout: %ss; Conda retries: %s\n' "$PIP_RETRIES" "$PIP_DEFAULT_TIMEOUT" "$CONDA_REMOTE_MAX_RETRIES"
+        git log -1 --oneline
     - name: Install build tools
       run: |
         set -Eeuo pipefail
@@ -72,7 +87,7 @@ jobs:
         cd "$PROJECT_DIRECTORY"
         python "$MPS_TOOLS/retry.py" -- python -m pip install -e ".[testing]"
         python -m pytest
-        python -m build --outdir "$GITHUB_WORKSPACE/dist"
+        python "$MPS_TOOLS/retry.py" --label "Pure package build" --log-file "$RUNNER_TEMP/pure-build.log" -- python -m build --outdir "$GITHUB_WORKSPACE/dist"
     - name: Test installed wheel outside checkout
       run: |
         set -Eeuo pipefail
@@ -115,3 +130,9 @@ jobs:
         name: ${{ inputs.artifact_identity }}
         path: dist/*
         if-no-files-found: error
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      if: always()
+      with:
+        name: logs-${{ inputs.artifact_identity }}
+        path: ${{ runner.temp }}/pure-*.log
+        if-no-files-found: ignore

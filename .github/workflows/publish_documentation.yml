@@ -1,4 +1,4 @@
-name: Build and Upload Package Documentation on GitHub Pages
+name: Build and publish documentation
 'on':
   workflow_call:
     inputs:
@@ -51,175 +51,37 @@ name: Build and Upload Package Documentation on GitHub Pages
         type: string
         required: false
         default: .
+      retain_versions:
+        type: number
+        default: 0
+        description: Number of versioned releases to retain; zero keeps all.
 permissions:
   contents: read
-concurrency:
-  group: documentation-pages-${{ github.repository }}
-  cancel-in-progress: false
-defaults:
-  run:
-    shell: bash
 jobs:
-  build_documentation:
-    runs-on: ubuntu-latest
-    env:
-      MPS_RETRIES: ${{ inputs.download_retries }}
-      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
-      MPLBACKEND: Agg
-      PYVISTA_OFF_SCREEN: 'true'
-      PROJECT_DIRECTORY: ${{ inputs.project_directory }}
-    outputs:
-      tag: ${{ steps.version.outputs.tag }}
-      branch_build: ${{ steps.version.outputs.branch_build }}
-    steps:
-    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      with:
-        fetch-depth: 0
-        submodules: recursive
-        ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
-    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-      with:
-        python-version: ${{ inputs.python-version }}
-    - &id001
-      name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v11
-    - name: Install documentation system dependencies
-      run: |
-        set -Eeuo pipefail
-        packages=()
-        read -r -a packages <<< "$APT_PACKAGES"
-        python "$MPS_TOOLS/retry.py" -- sudo apt-get update
-        python "$MPS_TOOLS/retry.py" -- sudo apt-get install -y "${packages[@]}"
-      env:
-        APT_PACKAGES: ${{ inputs.apt-package }}
-      if: inputs.apt-package != ''
-    - name: Install build tools
-      run: |
-        set -Eeuo pipefail
-        python "$MPS_TOOLS/retry.py" -- python -m pip install --upgrade build
-    - name: Build wheel and install documentation extras
-      run: |
-        set -Eeuo pipefail
-        python -m build --wheel "$PROJECT_DIRECTORY" --outdir dist
-        python - <<'PYTHON'
-        import os, subprocess, sys
-        from pathlib import Path
-        wheels = list(Path('dist').glob('*.whl'))
-        if len(wheels) != 1:
-            raise SystemExit('Expected one documentation wheel.')
-        subprocess.run([sys.executable, os.environ['MPS_TOOLS'] + '/retry.py', '--',
-                        sys.executable, '-m', 'pip', 'install', str(wheels[0]) + '[documentation]'], check=True)
-        PYTHON
-    - name: Resolve documentation version
-      run: |
-        set -Eeuo pipefail
-        if [[ "$CHECKOUT_REF" == refs/tags/* ]]; then
-          tag="${CHECKOUT_REF#refs/tags/}"
-          branch_build=false
-        elif [ -n "$SOURCE_REF" ] && git show-ref --verify --quiet "refs/tags/$SOURCE_REF"; then
-          tag="$SOURCE_REF"
-          branch_build=false
-        else
-          tag=latest
-          branch_build=true
-        fi
-        printf 'tag=%s\nbranch_build=%s\n' "$tag" "$branch_build" >> "$GITHUB_OUTPUT"
-      env:
-        CHECKOUT_REF: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
-        SOURCE_REF: ${{ inputs.source-ref }}
-      id: version
-    - name: Build Sphinx documentation
-      run: |
-        set -Eeuo pipefail
-        options=(-b html -d "$RUNNER_TEMP/documentation-doctrees")
-        if [ "$FAIL_ON_WARNING" = true ]; then options+=(-W --keep-going); fi
-        if [ "$DEBUG" = true ]; then options+=(-v); fi
-        python -m sphinx "${options[@]}" "$PROJECT_DIRECTORY/docs/source" "$RUNNER_TEMP/documentation-html" 2>&1 | tee "$RUNNER_TEMP/sphinx.log"
-        test -f "$RUNNER_TEMP/documentation-html/index.html"
-      env:
-        FAIL_ON_WARNING: ${{ inputs.fail-on-sphinx-warning }}
-        DEBUG: ${{ inputs.debug }}
-    - name: Summarize documentation build
-      run: |
-        set -Eeuo pipefail
-        html_count="$(find "$RUNNER_TEMP/documentation-html" -type f -name '*.html' | wc -l | tr -d ' ')"
-        printf '### Documentation built\n\nHTML pages: %s\n\nSource commit: %s\n' "$html_count" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-    - name: Debug documentation environment
-      run: |
-        set -Eeuo pipefail
-        git log -1 --oneline
-        python -m pip list
-        du -sh "$RUNNER_TEMP/documentation-html"
-      if: always() && inputs.debug
-    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-      with:
-        name: documentation-html
-        path: ${{ runner.temp }}/documentation-html
-        if-no-files-found: error
-    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-      with:
-        name: documentation-build-log
-        path: ${{ runner.temp }}/sphinx.log
-        if-no-files-found: ignore
-      if: always()
-  deploy_documentation:
-    if: inputs.deploy-pages
-    needs: build_documentation
-    runs-on: ubuntu-latest
+  build:
+    uses: ./.github/workflows/build_documentation.yml
+    with:
+      python-version: ${{ inputs.python-version }}
+      package-name: ${{ inputs.package-name }}
+      apt-package: ${{ inputs.apt-package }}
+      source-ref: ${{ inputs.source-ref }}
+      fail-on-sphinx-warning: ${{ inputs.fail-on-sphinx-warning }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      debug: ${{ inputs.debug }}
+      project_directory: ${{ inputs.project_directory }}
+  deploy:
+    needs: build
+    if: inputs.deploy-pages && github.event_name == 'push'
     permissions:
       contents: write
-    env:
-      DOC_TAG: ${{ needs.build_documentation.outputs.tag }}
-      BRANCH_BUILD: ${{ needs.build_documentation.outputs.branch_build }}
-      DOCUMENTATION_BRANCH: ${{ inputs.documentation_branch }}
-      BASE_URL: ${{ inputs.base_url }}
-      PACKAGE_NAME: ${{ inputs.package-name }}
-    steps:
-    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-      with:
-        python-version: ${{ inputs.python-version }}
-    - *id001
-    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      with:
-        fetch-depth: 0
-        path: site
-    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-      with:
-        pattern: documentation-html
-        path: ${{ runner.temp }}/documentation-html
-        merge-multiple: true
-    - name: Prepare documentation branch
-      run: |
-        set -Eeuo pipefail
-        cd site
-        if git ls-remote --exit-code origin "refs/heads/$DOCUMENTATION_BRANCH" >/dev/null; then
-          git fetch origin "$DOCUMENTATION_BRANCH"
-          git switch --force-create "$DOCUMENTATION_BRANCH" FETCH_HEAD
-        else
-          git switch --orphan "$DOCUMENTATION_BRANCH"
-        fi
-    - name: Update versioned documentation
-      run: |
-        set -Eeuo pipefail
-        base_url="$BASE_URL"
-        if [ -z "$base_url" ]; then
-          owner="${GITHUB_REPOSITORY%%/*}"
-          repository="${GITHUB_REPOSITORY#*/}"
-          base_url="https://${owner,,}.github.io/$repository"
-        fi
-        options=()
-        if [ "$BRANCH_BUILD" = true ]; then options+=(--branch-build); fi
-        python "$MPS_TOOLS/docs.py" --source "$RUNNER_TEMP/documentation-html" --root site \
-          --tag "$DOC_TAG" --base-url "$base_url" --template "$MPS_TOOLS/../../asset/template_index.html" "${options[@]}"
-    - name: Commit and publish documentation
-      run: |
-        set -Eeuo pipefail
-        cd site
-        git config user.name 'github-actions[bot]'
-        git config user.email 'github-actions[bot]@users.noreply.github.com'
-        git add -f docs index.html version_switcher.json .nojekyll
-        if ! git diff --cached --quiet; then
-          git commit -m "Update documentation for $DOC_TAG [skip ci]"
-          git push origin "HEAD:$DOCUMENTATION_BRANCH"
-        fi
-        printf '### Documentation deployed\n\nVersion: %s\n\nBranch: %s\n' "$DOC_TAG" "$DOCUMENTATION_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy_documentation.yml
+    with:
+      python-version: ${{ inputs.python-version }}
+      documentation_branch: ${{ inputs.documentation_branch }}
+      base_url: ${{ inputs.base_url }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      retain_versions: ${{ inputs.retain_versions }}

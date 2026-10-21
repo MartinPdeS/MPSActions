@@ -81,3 +81,50 @@ def test_missing_remote_package_is_not_an_upload_failure():
         raise HTTPError(url, 404, 'Not Found', {}, None)
 
     assert publish.fetch('https://example.test', opener=opener) is None
+
+
+def test_transient_upload_failure_is_retried(tmp_path, monkeypatch):
+    wheel(tmp_path)
+    artifacts.write_manifest(tmp_path, 'pypi', 'wheels-linux')
+    monkeypatch.setenv('TWINE_PASSWORD', 'test-token')
+    uploads, waits = [], []
+
+    def runner(command, **kwargs):
+        if command[2:4] == ['twine', 'check']:
+            return subprocess.CompletedProcess(command, 0)
+        uploads.append(command)
+        return subprocess.CompletedProcess(command, 1 if len(uploads) == 1 else 0, 'HTTP 502 Bad Gateway\n')
+
+    publish.publish(tmp_path, 'pypi', ['wheels-linux'], remote=lambda *args: None,
+                    runner=runner, sleep=waits.append)
+    assert len(uploads) == 2
+    assert waits == [10]
+
+
+def test_ambiguous_upload_is_not_repeated_if_remote_checksum_matches(tmp_path, monkeypatch):
+    path = wheel(tmp_path)
+    artifacts.write_manifest(tmp_path, 'pypi', 'wheels-linux')
+    monkeypatch.setenv('TWINE_PASSWORD', 'test-token')
+    responses = iter([None, artifacts.sha256(path)])
+    uploads = []
+
+    def runner(command, **kwargs):
+        if command[2:4] == ['twine', 'check']:
+            return subprocess.CompletedProcess(command, 0)
+        uploads.append(command)
+        return subprocess.CompletedProcess(command, 1, 'ReadTimeout\n')
+
+    publish.publish(tmp_path, 'pypi', ['wheels-linux'], remote=lambda *args: next(responses),
+                    runner=runner, sleep=lambda delay: pytest.fail('upload already completed'))
+    assert len(uploads) == 1
+
+
+@pytest.mark.parametrize('error', ['HTTP 400 Bad Request', 'HTTP 403 Forbidden'])
+def test_permanent_upload_failure_is_not_retried(tmp_path, monkeypatch, error):
+    wheel(tmp_path)
+    artifacts.write_manifest(tmp_path, 'pypi', 'wheels-linux')
+    monkeypatch.setenv('TWINE_PASSWORD', 'test-token')
+    with pytest.raises(RuntimeError, match='Upload failed'):
+        publish.publish(tmp_path, 'pypi', ['wheels-linux'], remote=lambda *args: None,
+                        runner=lambda command, **kwargs: subprocess.CompletedProcess(command, 1, error),
+                        sleep=lambda delay: pytest.fail('permanent upload error retried'))

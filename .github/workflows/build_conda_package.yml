@@ -92,13 +92,28 @@ jobs:
       MAX_SIZE: ${{ inputs.max_artifact_size_mb }}
       TOOLS_PYTHON: ${{ inputs.tools_python_version }}
       CONDA_BUILD_VERSION: ${{ inputs.conda_build_version }}
+      PIP_RETRIES: '5'
+      PIP_DEFAULT_TIMEOUT: '60'
+      PIP_RESUME_RETRIES: '5'
+      UV_HTTP_RETRIES: '5'
+      UV_HTTP_TIMEOUT: '60'
+      CONDA_REMOTE_MAX_RETRIES: '5'
+      CONDA_REMOTE_CONNECT_TIMEOUT_SECS: '30'
+      CONDA_REMOTE_READ_TIMEOUT_SECS: '90'
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       with:
         fetch-depth: 0
         submodules: recursive
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v11
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+    - name: Log source and network retry policy
+      run: |
+        set -Eeuo pipefail
+        printf 'Repository: %s\nRef: %s\nCommit: %s\nRunner: %s/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$RUNNER_OS" "$RUNNER_ARCH"
+        printf 'Additional network attempts: %s; initial backoff: %ss\n' "$MPS_RETRIES" "$MPS_RETRY_DELAY"
+        printf 'pip retries: %s; timeout: %ss; Conda retries: %s\n' "$PIP_RETRIES" "$PIP_DEFAULT_TIMEOUT" "$CONDA_REMOTE_MAX_RETRIES"
+        git log -1 --oneline
     - name: Install Linux build dependencies
       run: |
         set -Eeuo pipefail
@@ -129,7 +144,6 @@ jobs:
         channels: ${{ inputs.conda_channels }}
         channel-priority: strict
         conda-remove-defaults: true
-    # Tooling Python stays independent of the target Python used by the recipe.
     - name: Install Conda build tools
       run: |
         set -Eeuo pipefail
@@ -146,10 +160,10 @@ jobs:
           [ -z "$channel" ] || channel_arguments+=("-c" "$channel")
         done
         mkdir -p "$CONDA_BUILD_OUTPUT_DIRECTORY"
-        # Do not retry compilation: only transient dependency downloads are retried.
+        # Repeat only when the log identifies a transient download failure.
         # Verification uses the exact archive in a separate, clean environment.
-        conda-build "$RECIPE_PATH" --no-test --python "$TARGET_PYTHON" \
-          --override-channels "${channel_arguments[@]}" --output-folder "$CONDA_BUILD_OUTPUT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/conda-build.log"
+        python "$MPS_TOOLS/retry.py" --label "Conda build / $TARGET_PYTHON" --log-file "$RUNNER_TEMP/conda-build.log" -- conda-build "$RECIPE_PATH" --no-test --python "$TARGET_PYTHON" \
+          --override-channels "${channel_arguments[@]}" --output-folder "$CONDA_BUILD_OUTPUT_DIRECTORY"
     - name: Verify the installed artifact
       run: |
         set -Eeuo pipefail
@@ -183,11 +197,10 @@ jobs:
         python --version
         python -m pip list
         git log -1 --oneline
-      if: always() && inputs.debug
+      if: always()
     - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
         name: logs-${{ env.IDENTITY }}
-        # Preserve dependency errors as well as compilation and installed-package tests.
         path: ${{ runner.temp }}/conda-*.log
         if-no-files-found: ignore
-      if: failure()
+      if: always()

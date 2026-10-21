@@ -109,8 +109,8 @@ jobs:
       id: matrix
   build:
     needs: plan
-    runs-on: ${{ matrix.platform == 'linux' && inputs.linux_runner || matrix.platform == 'macos' && inputs.macos_runner
-      || inputs.windows_runner }}
+    runs-on: ${{ matrix.platform == 'linux' && inputs.linux_runner || matrix.platform == 'macos' && inputs.macos_runner ||
+      inputs.windows_runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -126,6 +126,14 @@ jobs:
       LIBGL_ALWAYS_SOFTWARE: '1'
       MESA_GL_VERSION_OVERRIDE: '3.3'
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'macos' && inputs.macos_deployment_target || '' }}
+      PIP_RETRIES: '5'
+      PIP_DEFAULT_TIMEOUT: '60'
+      PIP_RESUME_RETRIES: '5'
+      UV_HTTP_RETRIES: '5'
+      UV_HTTP_TIMEOUT: '60'
+      CONDA_REMOTE_MAX_RETRIES: '5'
+      CONDA_REMOTE_CONNECT_TIMEOUT_SECS: '30'
+      CONDA_REMOTE_READ_TIMEOUT_SECS: '90'
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       with:
@@ -135,7 +143,14 @@ jobs:
       with:
         python-version: ${{ inputs.python_version }}
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v11
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+    - name: Log source and network retry policy
+      run: |
+        set -Eeuo pipefail
+        printf 'Repository: %s\nRef: %s\nCommit: %s\nRunner: %s/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$RUNNER_OS" "$RUNNER_ARCH"
+        printf 'Additional network attempts: %s; initial backoff: %ss\n' "$MPS_RETRIES" "$MPS_RETRY_DELAY"
+        printf 'pip retries: %s; timeout: %ss; Conda retries: %s\n' "$PIP_RETRIES" "$PIP_DEFAULT_TIMEOUT" "$CONDA_REMOTE_MAX_RETRIES"
+        git log -1 --oneline
     - name: Install Linux packages
       run: |
         set -Eeuo pipefail
@@ -201,21 +216,20 @@ jobs:
         "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --print-build-identifiers "$PROJECT_DIRECTORY" > "$RUNNER_TEMP/expected-wheels.txt"
         test -s "$RUNNER_TEMP/expected-wheels.txt"
         cat "$RUNNER_TEMP/expected-wheels.txt"
-    # pipefail preserves build/test failures while tee retains the full diagnostic log.
-    # Never retry compilation or tests; retries apply only to transient downloads.
     - name: Build and test wheels
       if: runner.os != 'Windows'
       run: |
         set -Eeuo pipefail
-        "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY" 2>&1 | tee "$RUNNER_TEMP/wheel-build.log"
-    # Git Bash prepends its own runtime directories to PATH.  MinGW's
-    # assembler then fails even CMake's ABI probe, so Fortran runtime
-    # dependencies disappear from subsequent mixed C++/Fortran links.
+        export CIBW_ENVIRONMENT_PASS_LINUX="${CIBW_ENVIRONMENT_PASS_LINUX:-} PIP_RETRIES PIP_DEFAULT_TIMEOUT PIP_RESUME_RETRIES UV_HTTP_RETRIES UV_HTTP_TIMEOUT"
+        "$MPS_PYTHON" "$MPS_TOOLS/retry.py" --label "Wheel build / $PLATFORM" --log-file "$RUNNER_TEMP/wheel-build.log" -- \
+          "$MPS_PYTHON" -m cibuildwheel --platform "$PLATFORM" --output-dir dist "$PROJECT_DIRECTORY"
     - name: Build and test Windows wheels
+      # Keep the native PowerShell PATH. Git Bash's runtime directories can
+      # break MinGW's assembler and detection of the Fortran runtime libraries.
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        & $env:MPS_PYTHON -m cibuildwheel --platform $env:PLATFORM --output-dir dist $env:PROJECT_DIRECTORY 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/wheel-build.log"
+        & $env:MPS_PYTHON "$env:MPS_TOOLS/retry.py" --label "Wheel build / Windows" --log-file "$env:RUNNER_TEMP/wheel-build.log" -- $env:MPS_PYTHON -m cibuildwheel --platform $env:PLATFORM --output-dir dist $env:PROJECT_DIRECTORY
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Validate distributions and write manifest
       run: |
@@ -234,7 +248,7 @@ jobs:
         "$MPS_PYTHON" --version
         "$MPS_PYTHON" -m pip list
         git log -1 --oneline
-      if: always() && inputs.debug
+      if: always()
     - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
         name: logs-wheels-${{ matrix.platform }}
@@ -242,4 +256,4 @@ jobs:
           ${{ runner.temp }}/wheel-*.log
           ${{ runner.temp }}/expected-wheels.txt
         if-no-files-found: ignore
-      if: failure()
+      if: always()

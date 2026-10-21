@@ -1,0 +1,173 @@
+name: Deploy prebuilt documentation
+'on':
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: '3.11'
+      documentation_branch:
+        type: string
+        default: documentation_page
+      base_url:
+        type: string
+        default: ''
+      download_retries:
+        type: number
+        default: 3
+      retry_delay_seconds:
+        type: number
+        default: 10
+      retain_versions:
+        description: Number of versioned releases to retain; zero keeps all versions.
+        type: number
+        default: 0
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: documentation-site-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      DOCUMENTATION_BRANCH: ${{ inputs.documentation_branch }}
+      BASE_URL: ${{ inputs.base_url }}
+      RETAIN_VERSIONS: ${{ inputs.retain_versions }}
+    steps:
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Load release helpers
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        path: site
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        name: documentation-html
+        path: ${{ runner.temp }}/documentation-html
+    - name: Verify documentation source and release version
+      run: |
+        set -Eeuo pipefail
+        python - <<'PYTHON'
+        import json, os
+        from pathlib import Path
+        source = Path(os.environ['RUNNER_TEMP'], 'documentation-html')
+        metadata = json.loads((source / 'mps-documentation-source.json').read_text())
+        if metadata['sha'] != os.environ['GITHUB_SHA']:
+            raise SystemExit('Documentation artifact comes from a different source commit.')
+        ref = os.environ['GITHUB_REF']
+        if ref.startswith('refs/tags/') and (metadata['branch_build'] or metadata['tag'] != ref.removeprefix('refs/tags/')):
+            raise SystemExit('Documentation artifact does not match the release tag.')
+        if not (source / 'index.html').is_file():
+            raise SystemExit('Documentation artifact has no index.html.')
+        print('Deploying documentation artifact:', json.dumps(metadata, indent=2))
+        with open(os.environ['GITHUB_ENV'], 'a') as output:
+            output.write('DOC_TAG=' + metadata['tag'] + '\n')
+            output.write('BRANCH_BUILD=' + str(metadata['branch_build']).lower() + '\n')
+        (source / 'mps-documentation-source.json').unlink()
+        PYTHON
+    - name: Prepare documentation branch
+      run: |
+        set -Eeuo pipefail
+        cd site
+        python "$MPS_TOOLS/retry.py" --label "Fetch documentation branches" -- git fetch origin
+        if git show-ref --verify --quiet "refs/remotes/origin/$DOCUMENTATION_BRANCH"; then
+          git switch --force-create "$DOCUMENTATION_BRANCH" "origin/$DOCUMENTATION_BRANCH"
+        else
+          git switch --orphan "$DOCUMENTATION_BRANCH"
+          git rm -rf .
+        fi
+    - name: Update versioned documentation and version switcher
+      run: |
+        set -Eeuo pipefail
+        base_url="$BASE_URL"
+        if [ -z "$base_url" ]; then
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repository="${GITHUB_REPOSITORY#*/}"
+          base_url="https://${owner,,}.github.io/$repository"
+        fi
+        options=()
+        if [ "$BRANCH_BUILD" = true ]; then options+=(--branch-build); fi
+        python "$MPS_TOOLS/docs.py" --source "$RUNNER_TEMP/documentation-html" --root site \
+          --tag "$DOC_TAG" --base-url "$base_url" --template "$MPS_TOOLS/../../asset/template_index.html" \
+          --retain-versions "$RETAIN_VERSIONS" "${options[@]}" 2>&1 | tee "$RUNNER_TEMP/documentation-deployment.log"
+        cat site/version_switcher.json
+        du -sh site/docs
+    - name: Commit and push documentation
+      run: |
+        set -Eeuo pipefail
+        cd site
+        git config user.name 'github-actions[bot]'
+        git config user.email 'github-actions[bot]@users.noreply.github.com'
+        git add -f docs index.html version_switcher.json .nojekyll
+        git diff --cached --stat
+        if ! git diff --cached --quiet; then
+          git commit -m "Update documentation for $DOC_TAG [skip ci]"
+        fi
+        python "$MPS_TOOLS/retry.py" --label "Push documentation branch" -- git push origin "HEAD:$DOCUMENTATION_BRANCH"
+    - name: Detect GitHub Pages publication mode
+      id: pages
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" --label "Read GitHub Pages settings" --log-file "$RUNNER_TEMP/pages-settings.json" -- \
+          gh api "repos/$GITHUB_REPOSITORY/pages"
+        python - <<'PYTHON'
+        import json, os
+        from pathlib import Path
+        settings = json.loads(Path(os.environ['RUNNER_TEMP'], 'pages-settings.json').read_text())
+        mode = settings['build_type']
+        print('GitHub Pages mode:', mode, 'source:', settings.get('source'))
+        if mode == 'legacy' and settings.get('source', {}).get('branch') != os.environ['DOCUMENTATION_BRANCH']:
+            raise SystemExit('Pages is configured to publish a different branch.')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('workflow=' + str(mode == 'workflow').lower() + '\n')
+        PYTHON
+    - name: Request branch-based GitHub Pages build
+      if: steps.pages.outputs.workflow != 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" --label "Request GitHub Pages build" -- gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+    - name: Configure GitHub Pages
+      if: steps.pages.outputs.workflow == 'true'
+      uses: actions/configure-pages@v6
+    - name: Upload GitHub Pages site
+      if: steps.pages.outputs.workflow == 'true'
+      uses: actions/upload-pages-artifact@v5
+      with:
+        path: site
+    - name: Deploy GitHub Pages site
+      if: steps.pages.outputs.workflow == 'true'
+      id: deployment
+      uses: actions/deploy-pages@v5
+    - name: Summarize documentation deployment
+      if: always()
+      env:
+        DEPLOYMENT_STATUS: ${{ job.status }}
+      run: |
+          printf '### Documentation deployment\n\nStatus: %s\n\nVersion: %s\n\nCommit: %s\n\nBranch: %s\n' \
+          "$DEPLOYMENT_STATUS" "${DOC_TAG:-unresolved}" "$GITHUB_SHA" "$DOCUMENTATION_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      if: always()
+      with:
+        name: documentation-deployment-log
+        path: ${{ runner.temp }}/documentation-deployment.log
+        if-no-files-found: ignore

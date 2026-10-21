@@ -1,0 +1,173 @@
+name: Build documentation artifact
+'on':
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+      package-name:
+        required: true
+        type: string
+      apt-package:
+        required: false
+        type: string
+        default: ''
+      source-ref:
+        required: false
+        type: string
+        default: ''
+      fail-on-sphinx-warning:
+        required: false
+        type: boolean
+        default: false
+      download_retries:
+        type: number
+        required: false
+        default: 3
+        description: "Additional attempts for transient download failures (0\u201310)."
+      retry_delay_seconds:
+        type: number
+        required: false
+        default: 10
+        description: Initial retry delay; increases linearly, capped at 60 seconds.
+      debug:
+        type: boolean
+        required: false
+        default: false
+      project_directory:
+        type: string
+        required: false
+        default: .
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  build_documentation:
+    runs-on: ubuntu-latest
+    env:
+      MPS_RETRIES: ${{ inputs.download_retries }}
+      MPS_RETRY_DELAY: ${{ inputs.retry_delay_seconds }}
+      MPLBACKEND: Agg
+      PYVISTA_OFF_SCREEN: 'true'
+      PROJECT_DIRECTORY: ${{ inputs.project_directory }}
+      PIP_RETRIES: '5'
+      PIP_DEFAULT_TIMEOUT: '60'
+      PIP_RESUME_RETRIES: '5'
+      UV_HTTP_RETRIES: '5'
+      UV_HTTP_TIMEOUT: '60'
+      CONDA_REMOTE_MAX_RETRIES: '5'
+      CONDA_REMOTE_CONNECT_TIMEOUT_SECS: '30'
+      CONDA_REMOTE_READ_TIMEOUT_SECS: '90'
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      branch_build: ${{ steps.version.outputs.branch_build }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      with:
+        fetch-depth: 0
+        submodules: recursive
+        ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.sha }}
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Load release helpers
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
+    - name: Log source and network retry policy
+      run: |
+        set -Eeuo pipefail
+        printf 'Repository: %s\nRef: %s\nCommit: %s\nRunner: %s/%s\n' "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$RUNNER_OS" "$RUNNER_ARCH"
+        printf 'Additional network attempts: %s; initial backoff: %ss\n' "$MPS_RETRIES" "$MPS_RETRY_DELAY"
+        printf 'pip retries: %s; timeout: %ss; Conda retries: %s\n' "$PIP_RETRIES" "$PIP_DEFAULT_TIMEOUT" "$CONDA_REMOTE_MAX_RETRIES"
+        git log -1 --oneline
+    - name: Install documentation system dependencies
+      run: |
+        set -Eeuo pipefail
+        packages=()
+        read -r -a packages <<< "$APT_PACKAGES"
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get update
+        python "$MPS_TOOLS/retry.py" -- sudo apt-get install -y "${packages[@]}"
+      env:
+        APT_PACKAGES: ${{ inputs.apt-package }}
+      if: inputs.apt-package != ''
+    - name: Install build tools
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" -- python -m pip install --upgrade build
+    - name: Build wheel and install documentation extras
+      run: |
+        set -Eeuo pipefail
+        python "$MPS_TOOLS/retry.py" --label "Documentation wheel build" --log-file "$RUNNER_TEMP/documentation-wheel.log" -- python -m build --wheel "$PROJECT_DIRECTORY" --outdir dist
+        python - <<'PYTHON'
+        import os, subprocess, sys
+        from pathlib import Path
+        wheels = list(Path('dist').glob('*.whl'))
+        if len(wheels) != 1:
+            raise SystemExit('Expected one documentation wheel.')
+        subprocess.run([sys.executable, os.environ['MPS_TOOLS'] + '/retry.py', '--',
+                        sys.executable, '-m', 'pip', 'install', str(wheels[0]) + '[documentation]'], check=True)
+        PYTHON
+    - name: Resolve documentation version
+      run: |
+        set -Eeuo pipefail
+        if [[ "$CHECKOUT_REF" == refs/tags/* ]]; then
+          tag="${CHECKOUT_REF#refs/tags/}"
+          branch_build=false
+        elif [ -n "$SOURCE_REF" ] && git show-ref --verify --quiet "refs/tags/$SOURCE_REF"; then
+          tag="$SOURCE_REF"
+          branch_build=false
+        else
+          tag=latest
+          branch_build=true
+        fi
+        printf 'tag=%s\nbranch_build=%s\n' "$tag" "$branch_build" >> "$GITHUB_OUTPUT"
+        printf "tag=%s\n" "$tag" >> "$GITHUB_ENV"
+        DOC_TAG="$tag" BRANCH_BUILD="$branch_build" python - <<'PYTHON'
+        import json, os, subprocess
+        from pathlib import Path
+        source_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+        metadata = {"tag": os.environ["DOC_TAG"], "branch_build": os.environ["BRANCH_BUILD"] == "true", "sha": source_sha}
+        Path(os.environ['RUNNER_TEMP'], 'documentation-source.json').write_text(json.dumps(metadata))
+        PYTHON
+      env:
+        CHECKOUT_REF: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
+        SOURCE_REF: ${{ inputs.source-ref }}
+      id: version
+    - name: Build Sphinx documentation
+      run: |
+        set -Eeuo pipefail
+        options=(-T -b html -d "$RUNNER_TEMP/documentation-doctrees")
+        if [ "$FAIL_ON_WARNING" = true ]; then options+=(-W --keep-going); fi
+        if [ "$DEBUG" = true ]; then options+=(-v); fi
+        python -m sphinx "${options[@]}" "$PROJECT_DIRECTORY/docs/source" "$RUNNER_TEMP/documentation-html" 2>&1 | tee "$RUNNER_TEMP/sphinx.log"
+        test -f "$RUNNER_TEMP/documentation-html/index.html"
+      env:
+        FAIL_ON_WARNING: ${{ inputs.fail-on-sphinx-warning }}
+        DEBUG: ${{ inputs.debug }}
+    - name: Summarize documentation build
+      run: |
+        set -Eeuo pipefail
+        html_count="$(find "$RUNNER_TEMP/documentation-html" -type f -name '*.html' | wc -l | tr -d ' ')"
+        printf '### Documentation built\n\nHTML pages: %s\n\nSource commit: %s\n' "$html_count" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+        cp "$RUNNER_TEMP/documentation-source.json" "$RUNNER_TEMP/documentation-html/mps-documentation-source.json"
+    - name: Debug documentation environment
+      run: |
+        set -Eeuo pipefail
+        git log -1 --oneline
+        python -m pip list
+        if [ -d "$RUNNER_TEMP/documentation-html" ]; then du -sh "$RUNNER_TEMP/documentation-html"; fi
+      if: always()
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: documentation-html
+        path: ${{ runner.temp }}/documentation-html
+        if-no-files-found: error
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: documentation-build-log
+        path: |-
+          ${{ runner.temp }}/sphinx.log
+          ${{ runner.temp }}/documentation-*.log
+        if-no-files-found: ignore
+      if: always()

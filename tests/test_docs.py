@@ -45,3 +45,15 @@ def test_landing_page_uses_callers_url(tmp_path):
     assert 'const baseUrl = "https://example.test/custom";' in rendered
     assert 'martinpdes' not in rendered
     assert '<base-url-' not in rendered
+
+
+def test_retention_removes_old_versions_and_switcher_entries(tmp_path):
+    source, site = tmp_path / 'source', tmp_path / 'site'
+    source.mkdir()
+    (source / 'index.html').write_text('documentation')
+    for tag in ('v1.9.0', 'v1.10.0', 'v2.0.0'):
+        update(source, site, tag, 'https://example.test', retain_versions=2)
+    assert not (site / 'docs/v1.9.0').exists()
+    assert (site / 'docs/latest/index.html').exists()
+    entries = json.loads((site / 'version_switcher.json').read_text())
+    assert [entry['version'] for entry in entries] == ['latest', 'v2.0.0', 'v1.10.0']

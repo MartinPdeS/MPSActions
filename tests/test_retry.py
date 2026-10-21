@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from retry import run
+from retry import is_transient, run
 
 
 class Process:
@@ -94,3 +94,39 @@ def test_retry_command_line_with_real_failing_process(tmp_path):
     assert result.returncode == 0
     assert counter.read_text() == '4'
     assert result.stdout.count('::warning::') == 3
+
+
+@pytest.mark.parametrize('output', [
+    'Could not resolve host: conda.anaconda.org',
+    'fatal: unable to access URL: Failed to connect',
+    'RPC failed; curl 92 HTTP/2 stream was not closed cleanly',
+    'TimeoutError: The read operation timed out',
+    'error: HTTP status code 503',
+])
+def test_build_network_failures_are_retried(output):
+    assert is_transient(output)
+
+
+@pytest.mark.parametrize('output', [
+    '502 Bad Gateway\nmodule.cpp: fatal error: missing header',
+    'ConnectionResetError\nerror LNK2019: unresolved external symbol',
+    'ReadTimeout\nAssertionError: numerical regression',
+    'ReadTimeout\nFAILED tests/test_api.py::test_value',
+    'ReadTimeout\nLibMambaUnsatisfiableError: unsupported Python',
+])
+def test_build_errors_override_earlier_network_warnings(output):
+    assert not is_transient(output)
+
+
+def test_attempt_logs_are_parseable_after_a_retried_api_call(tmp_path, capsys):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append(command)
+        return Process(1, 'HTTP 502\n') if len(calls) == 1 else Process(0, '{"build_type":"workflow"}\n')
+
+    log = tmp_path / 'api.json'
+    assert run(['gh'], runner=runner, sleep=lambda wait: None, label='Pages API', log_file=log) == 0
+    import json
+    assert json.loads(log.read_text()) == {'build_type': 'workflow'}
+    assert 'Pages API: attempt 2/4' in capsys.readouterr().out

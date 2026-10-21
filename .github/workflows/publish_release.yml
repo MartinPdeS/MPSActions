@@ -10,7 +10,7 @@ name: Publish Python Package Release
         required: false
         type: string
         default: compiled
-        description: "PyPI build mode: pure or compiled."
+        description: 'PyPI build mode: pure or compiled.'
       pypi_build_linux:
         required: false
         type: boolean
@@ -43,7 +43,7 @@ name: Publish Python Package Release
         required: false
         type: string
         default: ''
-        description: "Optional command to validate the repository tag and release metadata."
+        description: Optional command to validate the repository tag and release metadata.
       pypi_apt_package:
         required: false
         type: string
@@ -160,6 +160,27 @@ name: Publish Python Package Release
         required: false
         default: ''
         description: PyPI distribution name; defaults to the Conda package name.
+      documentation:
+        required: false
+        type: boolean
+        default: false
+        description: Build documentation before publication; deploy only after both registries succeed.
+      documentation_python_version:
+        required: false
+        type: string
+        default: '3.11'
+      documentation_package_name:
+        required: false
+        type: string
+        default: ''
+      documentation_apt_package:
+        required: false
+        type: string
+        default: ''
+      documentation_retain_versions:
+        required: false
+        type: number
+        default: 0
     secrets:
       PYPI_API_TOKEN:
         required: true
@@ -206,6 +227,10 @@ jobs:
             raise SystemExit('The PyPI artifact matrix must not be empty.')
         if not conda:
             raise SystemExit('The Conda artifact matrix must not be empty.')
+        print('Release reference:', os.environ['GITHUB_REF'])
+        print('Source commit:', os.environ['GITHUB_SHA'])
+        print('Expected PyPI builds:', json.dumps(pypi))
+        print('Expected Conda builds:', json.dumps(conda))
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
             output.write('pypi=' + json.dumps(pypi) + '\n')
             output.write('conda=' + json.dumps(conda) + '\n')
@@ -218,8 +243,6 @@ jobs:
         RUNNERS: ${{ inputs.conda_os_list }}
         PYTHONS: ${{ inputs.conda_python_versions }}
       id: plan
-  # Relative reusable workflows resolve to the same revision as this entry point.
-  # Build jobs receive no registry tokens.
   pypi_pure:
     if: inputs.pypi_package_type == 'pure'
     uses: ./.github/workflows/build_pure_package.yml
@@ -276,17 +299,16 @@ jobs:
       retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
       debug: ${{ inputs.debug }}
     needs: plan
-  # Both registries wait for the complete build matrix and checksum/metadata checks.
-  # Uploads across two registries cannot be atomic; reruns safely resume publication.
   validate:
-    if: >-
-      always() && needs.plan.result == 'success' && needs.conda.result == 'success' &&
-      (needs.pypi_pure.result == 'success' || needs.pypi_compiled.result == 'success')
+    if: |-
+      always() && needs.plan.result == 'success' && needs.conda.result == 'success' && (needs.pypi_pure.result == 'success' || needs.pypi_compiled.result == 'success') &&
+      (!inputs.documentation || needs.documentation_build.result == 'success')
     needs:
     - plan
     - pypi_pure
     - pypi_compiled
     - conda
+    - documentation_build
     uses: ./.github/workflows/validate_release.yml
     with:
       wheel_identities: ${{ needs.plan.outputs.pypi }}
@@ -294,8 +316,7 @@ jobs:
       package_name: ${{ inputs.conda_package_name }}
       download_retries: ${{ inputs.download_retries }}
       retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
-      pypi_package_name: ${{ inputs.pypi_package_name != '' && inputs.pypi_package_name || inputs.conda_package_name
-        }}
+      pypi_package_name: ${{ inputs.pypi_package_name != '' && inputs.pypi_package_name || inputs.conda_package_name }}
   publish_pypi:
     needs:
     - plan
@@ -310,6 +331,7 @@ jobs:
       retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
     secrets:
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+    if: '!cancelled() && needs.validate.result == ''success'''
   publish_conda:
     needs:
     - plan
@@ -324,3 +346,61 @@ jobs:
       retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
     secrets:
       ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+    if: '!cancelled() && needs.validate.result == ''success'''
+  documentation_build:
+    needs: plan
+    if: inputs.documentation
+    uses: ./.github/workflows/build_documentation.yml
+    with:
+      python-version: ${{ inputs.documentation_python_version }}
+      package-name: ${{ inputs.documentation_package_name != '' && inputs.documentation_package_name || inputs.conda_package_name
+        }}
+      apt-package: ${{ inputs.documentation_apt_package }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      debug: ${{ inputs.debug }}
+  documentation_publish:
+    needs:
+    - publish_pypi
+    - publish_conda
+    - documentation_build
+    if: '!cancelled() && inputs.documentation && needs.publish_pypi.result == ''success'' && needs.publish_conda.result ==
+      ''success'' && needs.documentation_build.result == ''success'''
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy_documentation.yml
+    with:
+      python-version: ${{ inputs.documentation_python_version }}
+      download_retries: ${{ inputs.download_retries }}
+      retry_delay_seconds: ${{ inputs.retry_delay_seconds }}
+      retain_versions: ${{ inputs.documentation_retain_versions }}
+  summary:
+    if: always()
+    needs:
+    - plan
+    - pypi_pure
+    - pypi_compiled
+    - conda
+    - documentation_build
+    - validate
+    - publish_pypi
+    - publish_conda
+    - documentation_publish
+    runs-on: ubuntu-latest
+    steps:
+    - name: Report every release stage
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        python - <<'PYTHON'
+        import json, os
+        results = json.loads(os.environ['RESULTS'])
+        lines = ['### Release stages', '', '| Stage | Result |', '| --- | --- |']
+        for name, details in results.items():
+            print(f"{name}: {details['result']}")
+            lines.append(f"| {name} | {details['result']} |")
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+            output.write('\n'.join(lines) + '\n')
+        PYTHON

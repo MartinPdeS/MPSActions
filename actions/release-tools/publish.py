@@ -11,6 +11,7 @@ from urllib.parse import quote
 from urllib.request import urlopen
 
 from artifacts import distributions, metadata, sha256, verify
+from retry import is_transient
 
 
 def fetch(url, digest=False, opener=urlopen, sleep=time.sleep):
@@ -33,7 +34,9 @@ def fetch(url, digest=False, opener=urlopen, sleep=time.sleep):
         except (URLError, TimeoutError):
             if attempt == retries:
                 raise
-        sleep(min(delay * (attempt + 1), 60))
+        wait = min(delay * (attempt + 1), 60)
+        print(f'::warning::Registry lookup failed; retry {attempt + 1}/{retries} in {wait}s.', flush=True)
+        sleep(wait)
     raise AssertionError('unreachable')
 
 
@@ -55,12 +58,15 @@ def existing_digest(path, registry, user, fetcher=fetch):
 
 
 def publish(root, registry, identities, user='martinpdes', remote=existing_digest,
-            runner=subprocess.run):
+            runner=subprocess.run, sleep=time.sleep):
     verify(root, registry, identities, os.environ.get('GITHUB_REF', ''))
     secret = 'TWINE_PASSWORD' if registry == 'pypi' else 'ANACONDA_API_TOKEN'
     if not os.environ.get(secret):
         raise ValueError(f'{secret} is required for publication')
     paths = distributions(root, registry)
+    retries = int(os.environ.get('MPS_RETRIES', '3'))
+    delay = int(os.environ.get('MPS_RETRY_DELAY', '10'))
+    print(f'Publishing {len(paths)} verified files to {registry}; additional network attempts: {retries}.', flush=True)
     if registry == 'pypi':
         runner(['python', '-m', 'twine', 'check', *map(str, paths)], check=True)
     for path in paths:
@@ -75,13 +81,27 @@ def publish(root, registry, identities, user='martinpdes', remote=existing_diges
         else:
             command = ['conda', 'run', '-n', 'base', 'anaconda', '--token',
                        os.environ['ANACONDA_API_TOKEN'], 'upload', '--user', user, str(path)]
-        # An ambiguous upload failure is resolved by re-running this job: remote
-        # checksums distinguish a completed upload from a file still to publish.
-        # Never force-overwrite an existing release.
-        result = runner(command, check=False)
-        if result.returncode:
-            raise RuntimeError(f'Upload failed for {path.name} (exit {result.returncode}); '
-                               'rerun the publish job to check whether it completed.')
+        for attempt in range(retries + 1):
+            print(f'Upload {path.name}: attempt {attempt + 1}/{retries + 1}', flush=True)
+            result = runner(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            output = result.stdout or ''
+            print(output, end='', flush=True)
+            if result.returncode == 0:
+                break
+            # A timeout can occur after the registry accepted the upload.
+            # Check the remote digest before attempting any upload again.
+            checksum = remote(path, registry, user)
+            if checksum is not None:
+                if checksum != sha256(path):
+                    raise ValueError(f'refusing to replace a different published file: {path.name}')
+                print(f'Upload completed despite connection failure: {path.name}', flush=True)
+                break
+            if attempt == retries or not is_transient(output):
+                raise RuntimeError(f'Upload failed for {path.name} (exit {result.returncode}); '
+                                   'rerun the publish job to check whether it completed.')
+            wait = min(delay * (attempt + 1), 60)
+            print(f'::warning::Transient upload failure for {path.name}; retry in {wait}s.', flush=True)
+            sleep(wait)
         print(f'Published: {path.name}')
 
 

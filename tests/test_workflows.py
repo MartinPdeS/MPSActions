@@ -1,4 +1,7 @@
 from pathlib import Path
+import json
+import os
+import subprocess
 import sys
 
 import pytest
@@ -77,7 +80,7 @@ def test_integration_workflows_use_real_builds_without_publication():
     assert jobs['native_conda']['uses'].endswith('build_conda_matrix.yml')
     assert all('secrets' not in job for job in jobs.values())
     assert all('publish' not in job['uses'] for name, job in jobs.items() if name != 'documentation')
-    assert jobs['documentation']['with']['deploy-pages'] is False
+    assert jobs['documentation']['uses'].endswith('build_documentation.yml')
 
 
 def test_conda_manifest_is_uploaded_with_archives():
@@ -88,7 +91,7 @@ def test_conda_manifest_is_uploaded_with_archives():
 
 
 def test_shared_assets_are_not_downloaded_from_master():
-    document = (ROOT / '.github/workflows/publish_documentation.yml').read_text()
+    document = (ROOT / '.github/workflows/build_documentation.yml').read_text()
     assert 'raw.githubusercontent.com' not in document
     assert 'inputs.debug' in document
     assert 'documentation-build-log' in document
@@ -96,3 +99,73 @@ def test_shared_assets_are_not_downloaded_from_master():
 
 def test_windows_quality_steps_use_bash():
     assert workflow('quality.yml')['defaults']['run']['shell'] == 'bash'
+
+
+@pytest.mark.parametrize('pypi', ['success', 'failure', 'skipped', 'cancelled'])
+@pytest.mark.parametrize('conda', ['success', 'failure', 'skipped', 'cancelled'])
+@pytest.mark.parametrize('build', ['success', 'failure', 'skipped', 'cancelled'])
+def test_documentation_deployment_requires_both_publications(pypi, conda, build):
+    """Evaluate the deployed condition against every combination of job results."""
+    jobs = workflow('publish_release.yml')['jobs']
+    deployment = jobs['documentation_publish']
+    assert set(deployment['needs']) == {'publish_pypi', 'publish_conda', 'documentation_build'}
+    condition = deployment['if'].replace('!cancelled()', 'True').replace('inputs.documentation', 'True')
+    for name, result in [('publish_pypi', pypi), ('publish_conda', conda), ('documentation_build', build)]:
+        condition = condition.replace(f'needs.{name}.result', repr(result))
+    condition = condition.replace('&&', ' and ')
+    assert eval(condition, {'__builtins__': {}}) == (pypi == conda == build == 'success')
+    assert '!cancelled()' in deployment['if']
+    assert 'documentation_build' in ancestors(jobs, 'publish_pypi')
+    assert 'documentation_build' in ancestors(jobs, 'publish_conda')
+    assert deployment['uses'].endswith('deploy_documentation.yml')
+
+
+def test_documentation_preview_is_read_only_and_deployment_reuses_html():
+    build = workflow('build_documentation.yml')
+    deploy = workflow('deploy_documentation.yml')
+    assert build['permissions'] == {'contents': 'read'}
+    assert 'git push' not in str(build)
+    assert 'python -m sphinx' not in str(deploy)
+    assert 'mps-documentation-source.json' in str(build)
+    assert 'different source commit' in str(deploy)
+    assert 'does not match the release tag' in str(deploy)
+    assert deploy['jobs']['deploy']['if'] == "github.event_name == 'push'"
+    assert deploy['jobs']['deploy']['concurrency']['cancel-in-progress'] is False
+
+
+def test_native_build_retry_preserves_windows_powershell_and_matrix_completion():
+    wheels = workflow('build_wheels.yml')['jobs']['build']
+    assert wheels['strategy']['fail-fast'] is False
+    windows = next(step for step in wheels['steps'] if step.get('name') == 'Build and test Windows wheels')
+    assert windows['shell'] == 'pwsh'
+    assert 'retry.py' in windows['run']
+    assert '$LASTEXITCODE' in windows['run']
+    conda = workflow('build_conda_package.yml')['jobs']['build']
+    assert 'retry.py' in next(step['run'] for step in conda['steps'] if step.get('name') == 'Build package')
+
+
+@pytest.mark.parametrize('source_sha,tag,branch_build,expected', [
+    ('source-commit', 'v1.2.3', False, 0),
+    ('other-commit', 'v1.2.3', False, 1),
+    ('source-commit', 'v1.2.2', False, 1),
+    ('source-commit', 'latest', True, 1),
+])
+def test_deployment_checks_actual_artifact_provenance(tmp_path, source_sha, tag, branch_build, expected):
+    """Run the deployment's provenance script against real artifact files."""
+    steps = workflow('deploy_documentation.yml')['jobs']['deploy']['steps']
+    check = next(step['run'] for step in steps if step.get('name') == 'Verify documentation source and release version')
+    script = check.split("python - <<'PYTHON'\n", 1)[1].rsplit('\nPYTHON', 1)[0]
+    source = tmp_path / 'documentation-html'
+    source.mkdir()
+    (source / 'index.html').write_text('documentation')
+    (source / 'mps-documentation-source.json').write_text(json.dumps({
+        'sha': source_sha, 'tag': tag, 'branch_build': branch_build,
+    }))
+    env = dict(os.environ, RUNNER_TEMP=str(tmp_path), GITHUB_SHA='source-commit',
+               GITHUB_REF='refs/tags/v1.2.3', GITHUB_ENV=str(tmp_path / 'job-environment'))
+    result = subprocess.run([sys.executable, '-c', script], env=env, capture_output=True, text=True)
+    assert result.returncode == expected, result.stderr
+    if expected == 0:
+        assert 'DOC_TAG=v1.2.3' in (tmp_path / 'job-environment').read_text()
+    else:
+        assert not (tmp_path / 'job-environment').exists()

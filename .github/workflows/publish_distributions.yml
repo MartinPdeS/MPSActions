@@ -44,9 +44,6 @@ permissions:
 defaults:
   run:
     shell: bash
-
-# Tokens are confined to publication; identical remote files are skipped on reruns.
-# Conflicting remote files fail rather than being overwritten.
 jobs:
   publish:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -67,7 +64,7 @@ jobs:
       with:
         python-version: ${{ inputs.python_version }}
     - name: Load release helpers
-      uses: MartinPdeS/MPSActions/actions/release-tools@v11
+      uses: MartinPdeS/MPSActions/actions/release-tools@v12
     - name: Install Conda archive reader
       run: |
         set -Eeuo pipefail
@@ -109,7 +106,7 @@ jobs:
     - name: Publish to PyPI
       run: |
         set -Eeuo pipefail
-        python "$MPS_TOOLS/publish.py" --root dist --registry pypi --identities-json "$ARTIFACT_IDENTITIES"
+        python "$MPS_TOOLS/publish.py" --root dist --registry pypi --identities-json "$ARTIFACT_IDENTITIES" 2>&1 | tee "$RUNNER_TEMP/publication.log"
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
@@ -131,7 +128,7 @@ jobs:
     - name: Publish to Anaconda
       run: |
         set -Eeuo pipefail
-        python "$MPS_TOOLS/publish.py" --root conda-build-artifacts --registry conda --identities-json "$ARTIFACT_IDENTITIES" --user "$UPLOAD_USER"
+        python "$MPS_TOOLS/publish.py" --root conda-build-artifacts --registry conda --identities-json "$ARTIFACT_IDENTITIES" --user "$UPLOAD_USER" 2>&1 | tee "$RUNNER_TEMP/publication.log"
       env:
         ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
         UPLOAD_USER: ${{ inputs.conda_upload_user }}
@@ -140,3 +137,9 @@ jobs:
       run: |
         set -Eeuo pipefail
         printf "### Publication complete\n\nRegistry: %s\n\nCommit: \`%s\`\n" "$REGISTRY" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      if: always()
+      with:
+        name: logs-publication-${{ inputs.registry }}
+        path: ${{ runner.temp }}/publication.log
+        if-no-files-found: ignore
