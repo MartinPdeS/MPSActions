@@ -31,9 +31,10 @@ uploads an HTML artifact with its source commit and version. Only after **both**
 registry uploads succeed does deployment publish that existing artifact. It
 checks the artifact's commit and release tag before updating the site.
 
-Branch and pull-request documentation workflows must omit tag triggers. Branch
-builds may publish `latest` as development documentation; pull requests build
-artifacts only. Versioned documentation is published through the release workflow.
+Branch and pull-request documentation workflows call `build_documentation.yml`
+with read-only permissions and omit tag triggers. They produce build artifacts
+only. Both versioned documentation and the online `latest` copy are published
+through the release workflow after both registries succeed.
 Deployment is serialized across branch and release runs. Pages settings determine
 whether the job uploads the site through GitHub Pages Actions or explicitly
 requests a build of the configured documentation branch.
