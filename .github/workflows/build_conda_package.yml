@@ -170,18 +170,15 @@ jobs:
           --python "$TARGET_PYTHON" --prefix "$RUNNER_TEMP/conda-package-test" --channels "$CHANNELS" 2>&1 | tee "$RUNNER_TEMP/conda-verification.log"
         cd "$RUNNER_TEMP"
         if [ -n "$TEST_COMMAND" ]; then
-          test_shell="$BASH"
           if [ "$RUNNER_OS" = Windows ]; then
-            # Conda can prepend its own ``bash`` shim to PATH.  It is not an
-            # executable shell on the Windows runner, so select Git Bash by
-            # its stable runner installation path instead.
-            git_bash='/c/Program Files/Git/bin/bash.exe'
-            test -f "$git_bash"
-            # Use forward slashes so Conda does not treat the drive letter as
-            # a relative command and prepend its own installation directory.
-            test_shell="$(cygpath -m "$git_bash")"
+            # Conda rewrites shell paths under its own installation on
+            # Windows.  The package test commands are Python commands, so
+            # use the native command interpreter instead of passing a shell
+            # path through conda run.
+            conda run -p "$RUNNER_TEMP/conda-package-test" cmd.exe /d /s /c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
+          else
+            conda run -p "$RUNNER_TEMP/conda-package-test" "$BASH" -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
           fi
-          conda run -p "$RUNNER_TEMP/conda-package-test" "$test_shell" -c "$TEST_COMMAND" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         elif [ -n "$TEST_IMPORT" ]; then
           conda run -p "$RUNNER_TEMP/conda-package-test" python -c "import $TEST_IMPORT" 2>&1 | tee -a "$RUNNER_TEMP/conda-verification.log"
         else
